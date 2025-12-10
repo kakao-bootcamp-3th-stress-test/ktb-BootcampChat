@@ -19,16 +19,18 @@ e2e/
 사용자 행위를 수행하는 함수들입니다. 검증 로직 없이 순수한 동작만 포함합니다.
 
 **auth.actions.js**
+
 ```javascript
 async function loginAction(page, credentials) {
   await page.goto(`${BASE_URL}/login`);
-  await page.getByTestId('login-email-input').fill(credentials.email);
-  await page.getByTestId('login-password-input').fill(credentials.password);
-  await page.getByTestId('login-submit-button').click();
+  await page.getByTestId("login-email-input").fill(credentials.email);
+  await page.getByTestId("login-password-input").fill(credentials.password);
+  await page.getByTestId("login-submit-button").click();
 }
 ```
 
 **포함 기능**:
+
 - `auth.actions.js` - 로그인, 회원가입, 로그아웃
 - `chat.actions.js` - 채팅방 생성, 입장, 메시지 전송
 - `profile.actions.js` - 프로필 조회, 수정
@@ -38,14 +40,16 @@ async function loginAction(page, credentials) {
 E2E 테스트 케이스입니다. actions 함수를 사용하여 동작을 수행하고 결과를 검증합니다.
 
 **auth.spec.js**
+
 ```javascript
-test('올바른 계정 정보로 로그인 성공', async ({ page }) => {
+test("올바른 계정 정보로 로그인 성공", async ({ page }) => {
   await loginAction(page, testUser);
   await expect(page).toHaveURL(`${BASE_URL}/chat`);
 });
 ```
 
 **테스트 파일**:
+
 - `auth.spec.js` - 인증 관련 테스트
 - `chat.spec.js` - 채팅 기능 테스트
 - `profile.spec.js` - 프로필 기능 테스트
@@ -70,12 +74,14 @@ npm run test --ui
 
 # 헤드풀 모드 (브라우저 UI 표시)
 npm run test --headed
+
+# trace 모드 (화면 테스트 확인 가능)
+npm run test:trace
 ```
 
 ### vscode extension
 
 Playwright Test for VSCode 확장 프로그램을 설치하여 IDE 내에서 테스트를 실행하고 디버깅할 수 있습니다.
-
 
 ### 환경 변수
 
@@ -108,7 +114,7 @@ BASE_URL=https://example.com npm test
 ```javascript
 const testUser = {
   email: `testuser_${Date.now()}@example.com`,
-  password: 'Password123!',
-  name: 'Test User',
+  password: "Password123!",
+  name: "Test User",
 };
 ```
