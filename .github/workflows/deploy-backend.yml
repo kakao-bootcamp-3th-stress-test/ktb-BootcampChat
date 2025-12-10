@@ -10,101 +10,65 @@ on:
   workflow_dispatch:
     inputs:
       deploy_servers:
-        description: '배포할 서버 목록 (예: ktb-be01 ktb-be02)'
+        description: '배포할 서버 목록 (공백으로 구분)'
         required: false
         type: string
 
 jobs:
-  build-and-push-image:
+  build-and-push:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Docker Hub Login
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
+      
+      - uses: docker/setup-buildx-action@v3
+      
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
-
-      - name: Build and Push Docker Image
+      
+      - name: Build and Push
         working-directory: apps/backend
         run: |
-          docker build \
-            --platform linux/amd64 \
-            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:${{ github.sha }} \
-            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:${{ github.sha }}
+          docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest
 
   deploy:
-    needs: build-and-push-image
+    needs: build-and-push
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Prepare SSH Key
-        env:
-          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+      - uses: actions/checkout@v4
+      
+      - name: Setup SSH
         run: |
-          if [ -z "$DEPLOY_SERVERS" ]; then
-            echo "Error: DEPLOY_SERVERS is required"
-            exit 1
-          fi
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          for server in $DEPLOY_SERVERS; do
-            ssh-keyscan -H $server >> ~/.ssh/known_hosts 2>/dev/null || true
-          done
+          ssh-keyscan -H ${{ secrets.DEPLOY_SERVERS_BACKEND }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Copy docker-compose.yaml to servers
+      - name: Deploy
         env:
-          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+          SERVER: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+          USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          MONGO: ${{ secrets.MONGO_URI }}
+          REDIS_H: ${{ secrets.REDIS_HOST }}
+          REDIS_P: ${{ secrets.REDIS_PORT }}
+          JWT: ${{ secrets.JWT_SECRET }}
+          ENC_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENC_SALT: ${{ secrets.ENCRYPTION_SALT }}
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "apps/backend/docker-compose.yaml"; then
-            echo "docker-compose.yaml changed, copying to servers..."
-            for server in $DEPLOY_SERVERS; do
-              echo "Copying docker-compose.yaml to $server..."
-            scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-              apps/backend/docker-compose.yaml \
-              ubuntu@$server:/home/ubuntu/docker-compose.yaml
-            done
-          else
-            echo "docker-compose.yaml not changed, skipping copy"
-          fi
-
-      - name: Deploy to servers
-        env:
-          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          MONGO_URI: ${{ secrets.MONGO_URI }}
-          REDIS_HOST: ${{ secrets.REDIS_HOST }}
-          REDIS_PORT: ${{ secrets.REDIS_PORT }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          ENCRYPTION_SALT: ${{ secrets.ENCRYPTION_SALT }}
-        run: |
-          set +x
-          for server in $DEPLOY_SERVERS; do
-            echo "Deploying to $server..."
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server bash -s << 'REMOTE_EOF'
+          for server in $SERVER; do
+            scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$server:/home/ubuntu/
+            ssh -i ~/.ssh/id_rsa ubuntu@$server "
               cd /home/ubuntu
-              export DOCKER_USERNAME=$DOCKER_USERNAME
-              export MONGO_URI=$MONGO_URI
-              export REDIS_HOST=$REDIS_HOST
-              export REDIS_PORT=$REDIS_PORT
-              export JWT_SECRET=$JWT_SECRET
-              export ENCRYPTION_KEY=$ENCRYPTION_KEY
-              export ENCRYPTION_SALT=$ENCRYPTION_SALT
-              docker pull $DOCKER_USERNAME/ktb-chat-backend:latest
+              export DOCKER_USERNAME=$USERNAME
+              export MONGO_URI=$MONGO
+              export REDIS_HOST=$REDIS_H
+              export REDIS_PORT=$REDIS_P
+              export JWT_SECRET=$JWT
+              export ENCRYPTION_KEY=$ENC_KEY
+              export ENCRYPTION_SALT=$ENC_SALT
+              docker pull $USERNAME/ktb-chat-backend:latest
               docker-compose up -d --force-recreate
-            REMOTE_EOF
+            "
           done
-
