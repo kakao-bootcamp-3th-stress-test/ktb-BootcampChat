@@ -1,0 +1,95 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches:
+      - ci-test
+    paths:
+      - 'apps/frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_servers:
+        description: '배포할 서버 목록 (예: ktb-fe01 ktb-fe02)'
+        required: false
+        type: string
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Hub Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and Push Docker Image
+        working-directory: apps/frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_SOCKET_URL: ${{ secrets.NEXT_PUBLIC_SOCKET_URL }}
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --build-arg NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+            --build-arg NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL \
+            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:${{ github.sha }} \
+            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:latest
+
+  deploy:
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Prepare SSH Key
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
+        run: |
+          if [ -z "$DEPLOY_SERVERS" ]; then
+            echo "Error: DEPLOY_SERVERS is required"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          for server in $DEPLOY_SERVERS; do
+            ssh-keyscan -H $server >> ~/.ssh/known_hosts 2>/dev/null || true
+          done
+
+      - name: Copy docker-compose.yaml to servers
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
+        run: |
+          for server in $DEPLOY_SERVERS; do
+            echo "Copying docker-compose.yaml to $server..."
+            scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+              apps/frontend/docker-compose.yaml \
+              ubuntu@$server:/home/ubuntu/ktb-chat-frontend/docker-compose.yaml
+          done
+
+      - name: Deploy to servers
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          for server in $DEPLOY_SERVERS; do
+            echo "Deploying to $server..."
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
+              cd /home/ubuntu/ktb-chat-frontend
+              export DOCKER_USERNAME=$DOCKER_USERNAME
+              docker pull $DOCKER_USERNAME/ktb-chat-frontend:latest
+              docker-compose up -d
+              docker system prune -f
+            REMOTE_EOF
+          done
+

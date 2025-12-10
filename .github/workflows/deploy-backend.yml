@@ -1,0 +1,110 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - ci-test
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_servers:
+        description: '배포할 서버 목록 (예: ktb-be01 ktb-be02)'
+        required: false
+        type: string
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Hub Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and Push Docker Image
+        working-directory: apps/backend
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:${{ github.sha }} \
+            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest
+
+  deploy:
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Prepare SSH Key
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+        run: |
+          if [ -z "$DEPLOY_SERVERS" ]; then
+            echo "Error: DEPLOY_SERVERS is required"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          for server in $DEPLOY_SERVERS; do
+            ssh-keyscan -H $server >> ~/.ssh/known_hosts 2>/dev/null || true
+          done
+
+      - name: Copy docker-compose.yaml to servers
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+        run: |
+          for server in $DEPLOY_SERVERS; do
+            echo "Copying docker-compose.yaml to $server..."
+            scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+              apps/backend/docker-compose.yaml \
+              ubuntu@$server:/home/ubuntu/ktb-chat-backend/docker-compose.yaml
+          done
+
+      - name: Create .env file on servers
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+        run: |
+          for server in $DEPLOY_SERVERS; do
+            echo "Creating .env file on $server..."
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
+              cd /home/ubuntu/ktb-chat-backend
+              cat > .env << EOF
+MONGO_URI=${{ secrets.MONGO_URI }}
+REDIS_HOST=${{ secrets.REDIS_HOST }}
+REDIS_PORT=${{ secrets.REDIS_PORT || '6379' }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+ENCRYPTION_SALT=${{ secrets.ENCRYPTION_SALT }}
+OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+EOF
+            REMOTE_EOF
+          done
+
+      - name: Deploy to servers
+        env:
+          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        run: |
+          for server in $DEPLOY_SERVERS; do
+            echo "Deploying to $server..."
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
+              cd /home/ubuntu/ktb-chat-backend
+              export DOCKER_USERNAME=$DOCKER_USERNAME
+              docker pull $DOCKER_USERNAME/ktb-chat-backend:latest
+              docker-compose up -d
+              docker system prune -f
+            REMOTE_EOF
+          done
+
