@@ -126,12 +126,12 @@ function NewChatRoom() {
         <Text typography="heading4">새 채팅방</Text>
 
         {error && (
-          <Callout color="danger">
-            <HStack gap="$200" alignItems="center">
+          <Callout.Root colorPalette="danger">
+            <Callout.Icon>
               <ErrorCircleIcon size={16} />
-              <Text>{error}</Text>
-            </HStack>
-          </Callout>
+            </Callout.Icon>
+            {error}
+          </Callout.Root>
         )}
 
         <VStack gap="$300" width="100%">
@@ -146,8 +146,8 @@ function NewChatRoom() {
                 size="lg"
                 placeholder="채팅방 이름을 입력하세요"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, name: value }))
                 }
                 disabled={loading}
                 data-testid="chat-room-name-input"
@@ -186,8 +186,8 @@ function NewChatRoom() {
                   size="lg"
                   placeholder="비밀번호를 입력하세요"
                   value={formData.password}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, password: e.target.value }))
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, password: value }))
                   }
                   disabled={loading}
                 />

@@ -47,7 +47,7 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
                 <div className="flex -space-x-2">
                   {participants.slice(0, maxVisibleAvatars).map((participant, index) => (
                     <div
-                      key={participant._id}
+                      key={participant._id || `participant-${index}`}
                       className="ring-1 rounded-full"
                       style={{ zIndex: maxVisibleAvatars - index }}
                     >
@@ -55,7 +55,7 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
                     </div>
                   ))}
                   {remainingCount > 0 && (
-                    <div className="ring-1 rounded-full z-0">
+                    <div key="remaining-count" className="ring-1 rounded-full z-0">
                       <div className="w-8 h-8 rounded-full bg-background-contrast-200 flex items-center justify-center">
                         <span className="text-xs font-medium text-foreground-hint-100">
                           +{remainingCount}
@@ -100,9 +100,9 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
               참여자 목록
             </Text>
             <div className="max-h-64 overflow-y-auto">
-              {participants.map((participant) => (
+              {participants.map((participant, index) => (
                 <HStack
-                  key={participant._id}
+                  key={participant._id || `participant-list-${index}`}
                   gap="$200"
                   alignItems="center"
                   className="px-2 py-2 hover:bg-background-contrast-100 rounded-lg transition-colors"
