@@ -51,6 +51,9 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Prepare SSH Key
         env:
           DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
@@ -70,26 +73,32 @@ jobs:
         env:
           DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
         run: |
-          for server in $DEPLOY_SERVERS; do
-            echo "Copying docker-compose.yaml to $server..."
+          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "apps/frontend/docker-compose.yaml"; then
+            echo "docker-compose.yaml changed, copying to servers..."
+            for server in $DEPLOY_SERVERS; do
+              echo "Copying docker-compose.yaml to $server..."
             scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
               apps/frontend/docker-compose.yaml \
-              ubuntu@$server:/home/ubuntu/ktb-chat-frontend/docker-compose.yaml
-          done
+              ubuntu@$server:/home/ubuntu/docker-compose.yaml
+            done
+          else
+            echo "docker-compose.yaml not changed, skipping copy"
+          fi
 
       - name: Deploy to servers
         env:
           DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
+          set +x
           for server in $DEPLOY_SERVERS; do
             echo "Deploying to $server..."
             ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
-              cd /home/ubuntu/ktb-chat-frontend
+              set +x
+              cd /home/ubuntu
               export DOCKER_USERNAME=$DOCKER_USERNAME
               docker pull $DOCKER_USERNAME/ktb-chat-frontend:latest
-              docker-compose up -d
-              docker system prune -f
+              docker-compose up -d --force-recreate
             REMOTE_EOF
           done
 

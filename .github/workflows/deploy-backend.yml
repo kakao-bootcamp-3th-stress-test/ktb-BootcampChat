@@ -46,6 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Prepare SSH Key
         env:
           DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
@@ -65,46 +68,44 @@ jobs:
         env:
           DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
         run: |
-          for server in $DEPLOY_SERVERS; do
-            echo "Copying docker-compose.yaml to $server..."
+          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "apps/backend/docker-compose.yaml"; then
+            echo "docker-compose.yaml changed, copying to servers..."
+            for server in $DEPLOY_SERVERS; do
+              echo "Copying docker-compose.yaml to $server..."
             scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
               apps/backend/docker-compose.yaml \
-              ubuntu@$server:/home/ubuntu/ktb-chat-backend/docker-compose.yaml
-          done
-
-      - name: Create .env file on servers
-        env:
-          DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
-        run: |
-          for server in $DEPLOY_SERVERS; do
-            echo "Creating .env file on $server..."
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
-              cd /home/ubuntu/ktb-chat-backend
-              cat > .env << EOF
-MONGO_URI=${{ secrets.MONGO_URI }}
-REDIS_HOST=${{ secrets.REDIS_HOST }}
-REDIS_PORT=${{ secrets.REDIS_PORT || '6379' }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
-ENCRYPTION_SALT=${{ secrets.ENCRYPTION_SALT }}
-OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-EOF
-            REMOTE_EOF
-          done
+              ubuntu@$server:/home/ubuntu/docker-compose.yaml
+            done
+          else
+            echo "docker-compose.yaml not changed, skipping copy"
+          fi
 
       - name: Deploy to servers
         env:
           DEPLOY_SERVERS: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_BACKEND }}
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_SALT: ${{ secrets.ENCRYPTION_SALT }}
         run: |
+          set +x
           for server in $DEPLOY_SERVERS; do
             echo "Deploying to $server..."
             ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
-              cd /home/ubuntu/ktb-chat-backend
+              set +x
+              cd /home/ubuntu
               export DOCKER_USERNAME=$DOCKER_USERNAME
+              export MONGO_URI=$MONGO_URI
+              export REDIS_HOST=$REDIS_HOST
+              export REDIS_PORT=$REDIS_PORT
+              export JWT_SECRET=$JWT_SECRET
+              export ENCRYPTION_KEY=$ENCRYPTION_KEY
+              export ENCRYPTION_SALT=$ENCRYPTION_SALT
               docker pull $DOCKER_USERNAME/ktb-chat-backend:latest
-              docker-compose up -d
-              docker system prune -f
+              docker-compose up -d --force-recreate
             REMOTE_EOF
           done
 

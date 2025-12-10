@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${DOCKER_USERNAME:-minsujeong}/ktb-chat-backend:latest
+    image: ${DOCKER_USERNAME}/ktb-chat-backend:latest
     container_name: ktb-chat-backend
     restart: unless-stopped
     ports:
@@ -14,6 +14,7 @@ services:
       - WS_PORT=5002
       - MONGO_URI=${MONGO_URI}
       - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-    env_file:
-      - .env
+      - REDIS_PORT=${REDIS_PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENCRYPTION_SALT=${ENCRYPTION_SALT}
