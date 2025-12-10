@@ -19,6 +19,7 @@ services:
       - '--storage.tsdb.retention.time=30d'
     networks:
       - monitoring
+
   grafana:
     image: grafana/grafana:11.4.0
     container_name: grafana-ktb
@@ -37,6 +38,20 @@ services:
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
+    networks:
+      - monitoring
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
     networks:
       - monitoring
 

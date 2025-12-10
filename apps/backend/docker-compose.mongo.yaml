@@ -14,10 +14,22 @@ services:
     networks:
       - mongo-network
 
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40
+    container_name: mongodb-exporter
+    restart: unless-stopped
+    ports:
+      - "9216:9216"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+    depends_on:
+      - mongo
+    networks:
+      - mongo-network
+
 networks:
   mongo-network:
     driver: bridge
 
 volumes:
   mongo_data:
-
