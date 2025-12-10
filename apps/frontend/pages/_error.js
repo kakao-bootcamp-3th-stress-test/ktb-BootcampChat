@@ -1,4 +1,4 @@
-import Head from 'next/head';
+import Head from "next/head";
 
 const ErrorPage = () => {
   return (
@@ -7,17 +7,27 @@ const ErrorPage = () => {
         <title>Page Not Found</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap"
+          rel="stylesheet"
+        />
       </Head>
       <style jsx global>{`
         /* 모든 전역 CSS 리셋 (_app.js의 globals.css, Vapor UI 등) */
-        html, body, div, span, h1, p, img, br {
+        html,
+        body,
+        div,
+        span,
+        h1,
+        p,
+        img,
+        br {
           all: revert;
         }
 
         :root {
-          --primary-blue: #00479D;
-          --primary-sky: #6BC8F2;
+          --primary-blue: #00479d;
+          --primary-sky: #6bc8f2;
         }
 
         html {
@@ -32,7 +42,7 @@ const ErrorPage = () => {
           min-height: 100vh !important;
           margin: 0 !important;
           padding: 20px !important;
-          font-family: 'Noto Sans KR', sans-serif !important;
+          font-family: "Noto Sans KR", sans-serif !important;
           background-color: #f9f9f9 !important;
           color: #333 !important;
           box-sizing: border-box !important;
@@ -78,32 +88,42 @@ const ErrorPage = () => {
           font-weight: 900;
         }
 
-        .error-page-animated-text span:nth-child(1) { animation-delay: 0.15s; }
-        .error-page-animated-text span:nth-child(2) { animation-delay: 0.3s; }
-        .error-page-animated-text span:nth-child(3) { animation-delay: 0.45s; }
-        .error-page-animated-text span:nth-child(4) { animation-delay: 0.6s; }
-        .error-page-animated-text span:nth-child(5) { animation-delay: 0.75s; }
+        .error-page-animated-text span:nth-child(1) {
+          animation-delay: 0.15s;
+        }
+        .error-page-animated-text span:nth-child(2) {
+          animation-delay: 0.3s;
+        }
+        .error-page-animated-text span:nth-child(3) {
+          animation-delay: 0.45s;
+        }
+        .error-page-animated-text span:nth-child(4) {
+          animation-delay: 0.6s;
+        }
+        .error-page-animated-text span:nth-child(5) {
+          animation-delay: 0.75s;
+        }
 
         @keyframes bounce-rotate {
           0% {
             transform: translateY(0) rotate(0deg) scale(1);
-            color: #00479D;
+            color: #00479d;
           }
           25% {
             transform: translateY(-30px) rotate(-10deg) scale(1.2);
-            color: #0052A3;
+            color: #0052a3;
           }
           50% {
             transform: translateY(-15px) rotate(10deg) scale(1.1);
-            color: #6BC8F2;
+            color: #6bc8f2;
           }
           75% {
             transform: translateY(-25px) rotate(-5deg) scale(1.15);
-            color: #0066CC;
+            color: #0066cc;
           }
           100% {
             transform: translateY(0) rotate(0deg) scale(1);
-            color: #00479D;
+            color: #00479d;
           }
         }
 
@@ -138,7 +158,11 @@ const ErrorPage = () => {
       `}</style>
       <div className="error-page-container">
         <div className="error-page-content">
-          <img src="/404.svg" alt="404 Error: Page Not Found" className="error-page-image" />
+          <img
+            src="/404.svg"
+            alt="404 Error: Page Not Found"
+            className="error-page-image"
+          />
           <h1 className="error-page-title">
             <span className="error-page-animated-text">
               <span>O</span>
@@ -151,8 +175,10 @@ const ErrorPage = () => {
             Page not found
           </h1>
           <p className="error-page-message">
-            요청하신 페이지를 찾을 수 없습니다.<br />
-            주소를 따라왔지만 원하는 목적지에 도착하지 못한 것 같아요.<br />
+            요청하신 페이지를 찾을 수 없습니다.
+            <br />
+            주소를 따라왔지만 원하는 목적지에 도착하지 못한 것 같아요.
+            <br />
             잠시 후 다시 시도해 주세요.
           </p>
         </div>

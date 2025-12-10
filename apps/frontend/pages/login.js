@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import { useEffect } from "react";
+import { useRouter } from "next/router";
 
 const LoginRedirect = () => {
   const router = useRouter();
@@ -7,7 +7,7 @@ const LoginRedirect = () => {
   useEffect(() => {
     // query params도 함께 전달 (예: redirect 파라미터)
     router.replace({
-      pathname: '/',
+      pathname: "/",
       query: router.query
     });
   }, [router]);
@@ -15,4 +15,4 @@ const LoginRedirect = () => {
   return null;
 };
 
-export default LoginRedirect;  
+export default LoginRedirect;

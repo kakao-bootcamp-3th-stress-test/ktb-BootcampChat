@@ -1,12 +1,12 @@
-import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
-import { ConfirmOutlineIcon } from '@vapor-ui/icons';
-import { Text, HStack } from '@vapor-ui/core';
+import React, { useMemo, useEffect, useState, useCallback, useRef } from "react";
+import { ConfirmOutlineIcon } from "@vapor-ui/icons";
+import { Text, HStack } from "@vapor-ui/core";
 
-const ReadStatus = ({ 
-  messageType = 'text',
+const ReadStatus = ({
+  messageType = "text",
   participants = [],
   readers = [],
-  className = '',
+  className = "",
   socketRef = null,
   messageId = null,
   messageRef = null, // 메시지 요소의 ref 추가
@@ -16,21 +16,22 @@ const ReadStatus = ({
   const statusRef = useRef(null);
   const observerRef = useRef(null);
 
-  // 읽지 않은 참여자 명단 생성 
+  // 읽지 않은 참여자 명단 생성
   const unreadParticipants = useMemo(() => {
-    if (messageType === 'system') return [];
-    
-    return participants.filter(participant => 
-      !readers.some(reader => 
-        reader.userId === participant._id || 
-        reader.userId === participant.id
-      )
+    if (messageType === "system") return [];
+
+    return participants.filter(
+      (participant) =>
+        !readers.some(
+          (reader) =>
+            reader.userId === participant._id || reader.userId === participant.id
+        )
     );
   }, [participants, readers, messageType]);
 
   // 읽지 않은 참여자 수 계산
   const unreadCount = useMemo(() => {
-    if (messageType === 'system') {
+    if (messageType === "system") {
       return 0;
     }
     return unreadParticipants.length;
@@ -38,34 +39,41 @@ const ReadStatus = ({
 
   // 메시지를 읽음으로 표시하는 함수
   const markMessageAsRead = useCallback(async () => {
-    if (!messageId || !currentUserId || hasMarkedAsRead || 
-        messageType === 'system' || !socketRef?.current) {
+    if (
+      !messageId ||
+      !currentUserId ||
+      hasMarkedAsRead ||
+      messageType === "system" ||
+      !socketRef?.current
+    ) {
       return;
     }
 
     try {
       // Socket.IO를 통해 서버에 읽음 상태 전송
-      socketRef.current.emit('markMessagesAsRead', {
+      socketRef.current.emit("markMessagesAsRead", {
         messageIds: [messageId]
       });
 
       setHasMarkedAsRead(true);
-
     } catch (error) {
-      console.error('Error marking message as read:', error);
+      console.error("Error marking message as read:", error);
     }
   }, [messageId, currentUserId, hasMarkedAsRead, messageType, socketRef]);
 
   // Intersection Observer 설정
   useEffect(() => {
-    if (!messageRef?.current || !currentUserId || hasMarkedAsRead || messageType === 'system') {
+    if (
+      !messageRef?.current ||
+      !currentUserId ||
+      hasMarkedAsRead ||
+      messageType === "system"
+    ) {
       return;
     }
 
     // 이미 읽은 메시지인지 확인
-    const isAlreadyRead = readers.some(reader => 
-      reader.userId === currentUserId
-    );
+    const isAlreadyRead = readers.some((reader) => reader.userId === currentUserId);
 
     if (isAlreadyRead) {
       setHasMarkedAsRead(true);
@@ -74,12 +82,12 @@ const ReadStatus = ({
 
     const observerOptions = {
       root: null,
-      rootMargin: '0px',
+      rootMargin: "0px",
       threshold: 0.5 // 메시지의 50%가 보여야 읽음으로 처리
     };
 
     const handleIntersect = (entries) => {
-      entries.forEach(entry => {
+      entries.forEach((entry) => {
         if (entry.isIntersecting && !hasMarkedAsRead) {
           markMessageAsRead();
         }
@@ -94,10 +102,17 @@ const ReadStatus = ({
         observerRef.current.disconnect();
       }
     };
-  }, [messageRef, currentUserId, hasMarkedAsRead, messageType, readers, markMessageAsRead]);
+  }, [
+    messageRef,
+    currentUserId,
+    hasMarkedAsRead,
+    messageType,
+    readers,
+    markMessageAsRead
+  ]);
 
   // 시스템 메시지는 읽음 상태 표시 안 함
-  if (messageType === 'system') {
+  if (messageType === "system") {
     return null;
   }
 
@@ -114,10 +129,12 @@ const ReadStatus = ({
         data-testid="read-status-all-read"
       >
         <HStack alignItems="center">
-          <ConfirmOutlineIcon size={12} className='text-v-success-100' />
-          <ConfirmOutlineIcon size={12} className='-ml-1.5 text-v-success-100' />
+          <ConfirmOutlineIcon size={12} className="text-v-success-100" />
+          <ConfirmOutlineIcon size={12} className="-ml-1.5 text-v-success-100" />
         </HStack>
-        <Text typography="subtitle2" className="text-v-hint-200">모두 읽음</Text>
+        <Text typography="subtitle2" className="text-v-hint-200">
+          모두 읽음
+        </Text>
       </HStack>
     );
   }

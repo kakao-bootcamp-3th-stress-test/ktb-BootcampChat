@@ -1,16 +1,16 @@
-import React from 'react';
-import { GroupOutlineIcon } from '@vapor-ui/icons';
-import { HStack, VStack, Text, Badge, Collapsible } from '@vapor-ui/core';
-import CustomAvatar from './CustomAvatar';
+import React from "react";
+import { GroupOutlineIcon } from "@vapor-ui/icons";
+import { HStack, VStack, Text, Badge, Collapsible } from "@vapor-ui/core";
+import CustomAvatar from "./CustomAvatar";
 
 const ChatRoomInfo = ({ room, connectionStatus }) => {
   const getConnectionStatus = () => {
-    if (connectionStatus === 'connecting') {
+    if (connectionStatus === "connecting") {
       return {
         label: "연결 중...",
         color: "warning"
       };
-    } else if (connectionStatus === 'connected') {
+    } else if (connectionStatus === "connected") {
       return {
         label: "연결됨",
         color: "success"
@@ -51,17 +51,11 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
                       className="ring-1 rounded-full"
                       style={{ zIndex: maxVisibleAvatars - index }}
                     >
-                      <CustomAvatar
-                        user={participant}
-                        size="sm"
-                        showInitials
-                      />
+                      <CustomAvatar user={participant} size="sm" showInitials />
                     </div>
                   ))}
                   {remainingCount > 0 && (
-                    <div
-                      className="ring-1 rounded-full z-0"
-                    >
+                    <div className="ring-1 rounded-full z-0">
                       <div className="w-8 h-8 rounded-full bg-background-contrast-200 flex items-center justify-center">
                         <span className="text-xs font-medium text-foreground-hint-100">
                           +{remainingCount}
@@ -71,7 +65,7 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
                   )}
                 </div>
                 <HStack gap="$050" alignItems="center" className="ml-1">
-                  <GroupOutlineIcon  className="text-foreground-hint-100 group-hover:text-foreground-normal-100" />
+                  <GroupOutlineIcon className="text-foreground-hint-100 group-hover:text-foreground-normal-100" />
                   <Text
                     typography="body2"
                     className="text-foreground-hint-100 group-hover:text-foreground-normal-100 font-medium"
@@ -89,14 +83,11 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
           typography="heading4"
           className="font-semibold text-foreground-normal-200 absolute left-1/2 transform -translate-x-1/2"
         >
-          {room?.name || '채팅방'}
+          {room?.name || "채팅방"}
         </Text>
 
         {/* 오른쪽: 연결 상태 */}
-        <Badge
-          colorPalette={status.color}
-          size="sm"
-        >
+        <Badge colorPalette={status.color} size="sm">
           {status.label}
         </Badge>
       </HStack>
@@ -116,14 +107,13 @@ const ChatRoomInfo = ({ room, connectionStatus }) => {
                   alignItems="center"
                   className="px-2 py-2 hover:bg-background-contrast-100 rounded-lg transition-colors"
                 >
-                  <CustomAvatar
-                    user={participant}
-                    size="md"
-                    showInitials
-                  />
+                  <CustomAvatar user={participant} size="md" showInitials />
                   <VStack gap="$050">
                     <HStack gap="$100" alignItems="center">
-                      <Text typography="body2" className="font-medium text-foreground-normal-200">
+                      <Text
+                        typography="body2"
+                        className="font-medium text-foreground-normal-200"
+                      >
                         {participant.name}
                       </Text>
                     </HStack>

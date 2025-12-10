@@ -1,27 +1,37 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ErrorCircleIcon, CheckCircleIcon } from '@vapor-ui/icons';
-import { Button, Box, VStack, HStack, Field, Form, Text, TextInput, Callout } from '@vapor-ui/core';
-import authService from '@/services/authService';
-import { withAuth, useAuth } from '@/contexts/AuthContext';
-import ProfileImageUpload from '@/components/ProfileImageUpload';
-import { generateColorFromEmail, getContrastTextColor } from '@/utils/colorUtils';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { ErrorCircleIcon, CheckCircleIcon } from "@vapor-ui/icons";
+import {
+  Button,
+  Box,
+  VStack,
+  HStack,
+  Field,
+  Form,
+  Text,
+  TextInput,
+  Callout
+} from "@vapor-ui/core";
+import authService from "@/services/authService";
+import { withAuth, useAuth } from "@/contexts/AuthContext";
+import ProfileImageUpload from "@/components/ProfileImageUpload";
+import { generateColorFromEmail, getContrastTextColor } from "@/utils/colorUtils";
 
 const Profile = () => {
   const { user, updateProfile: updateProfileContext, updateUser } = useAuth();
   const [formData, setFormData] = useState({
-    name: '',
-    newPassword: '',
-    confirmPassword: ''
+    name: "",
+    newPassword: "",
+    confirmPassword: ""
   });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const avatarStyleRef = useRef(null);
 
   // 초기 폼 데이터 설정
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({ ...prev, name: user.name }));
+      setFormData((prev) => ({ ...prev, name: user.name }));
 
       // 아바타 스타일 설정
       if (!avatarStyleRef.current && user.email) {
@@ -32,19 +42,22 @@ const Profile = () => {
     }
   }, [user]);
 
-  const handleImageChange = useCallback(async (imageUrl) => {
-    // ProfileImageUpload 컴포넌트에서 이미 업로드를 처리하므로
-    // Context의 사용자 정보만 업데이트
-    updateUser({ profileImage: imageUrl });
-  }, [updateUser]);
+  const handleImageChange = useCallback(
+    async (imageUrl) => {
+      // ProfileImageUpload 컴포넌트에서 이미 업로드를 처리하므로
+      // Context의 사용자 정보만 업데이트
+      updateUser({ profileImage: imageUrl });
+    },
+    [updateUser]
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
 
     if (formData.newPassword !== formData.confirmPassword) {
-      setError('새 비밀번호가 일치하지 않습니다.');
+      setError("새 비밀번호가 일치하지 않습니다.");
       return;
     }
 
@@ -54,7 +67,7 @@ const Profile = () => {
       // 비밀번호 변경 처리
       if (formData.newPassword) {
         await authService.changePassword(
-          '',
+          "",
           formData.newPassword,
           user.token,
           user.sessionId
@@ -68,18 +81,21 @@ const Profile = () => {
       }
 
       // 성공 메시지 설정
-      setSuccess('프로필이 성공적으로 업데이트되었습니다.');
+      setSuccess("프로필이 성공적으로 업데이트되었습니다.");
 
       // 비밀번호 필드 초기화
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        newPassword: '',
-        confirmPassword: ''
+        newPassword: "",
+        confirmPassword: ""
       }));
-
     } catch (err) {
-      console.error('Profile update error:', err);
-      setError(err.response?.data?.message || err.message || '프로필 업데이트 중 오류가 발생했습니다.');
+      console.error("Profile update error:", err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "프로필 업데이트 중 오류가 발생했습니다."
+      );
     } finally {
       setLoading(false);
     }
@@ -105,7 +121,7 @@ const Profile = () => {
         render={<Form onSubmit={handleSubmit} />}
       >
         <Text typography="heading4">프로필 설정</Text>
-        
+
         <Box display="flex" justifyContent="center" width="100%">
           <ProfileImageUpload
             currentImage={user.profileImage}
@@ -146,7 +162,7 @@ const Profile = () => {
               />
             </Box>
           </Field.Root>
-          
+
           <Field.Root>
             <Box render={<Field.Label />} flexDirection="column">
               <Text typography="subtitle2" foreground="normal-200">
@@ -157,7 +173,9 @@ const Profile = () => {
                 size="lg"
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
                 disabled={loading}
                 required
                 placeholder="이름을 입력하세요"
@@ -166,7 +184,7 @@ const Profile = () => {
             </Box>
             <Field.Error match="valueMissing">이름을 입력해주세요.</Field.Error>
           </Field.Root>
-          
+
           <Field.Root>
             <Box render={<Field.Label />} flexDirection="column">
               <Text typography="subtitle2" foreground="normal-200">
@@ -177,7 +195,9 @@ const Profile = () => {
                 size="lg"
                 type="password"
                 value={formData.newPassword}
-                onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, newPassword: e.target.value }))
+                }
                 disabled={loading}
                 placeholder="새 비밀번호를 입력하세요"
                 pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_]).{8,16}"
@@ -191,7 +211,7 @@ const Profile = () => {
               유효한 비밀번호 형식이 아닙니다.
             </Field.Error>
           </Field.Root>
-          
+
           <Field.Root>
             <Box render={<Field.Label />} flexDirection="column">
               <Text typography="subtitle2" foreground="normal-200">
@@ -202,7 +222,9 @@ const Profile = () => {
                 size="lg"
                 type="password"
                 value={formData.confirmPassword}
-                onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, confirmPassword: e.target.value }))
+                }
                 disabled={loading}
                 placeholder="새 비밀번호를 다시 입력하세요"
                 data-testid="confirm-password-input"
@@ -216,7 +238,7 @@ const Profile = () => {
             disabled={loading}
             data-testid="profile-save-button"
           >
-            {loading ? '저장 중...' : '저장'}
+            {loading ? "저장 중..." : "저장"}
           </Button>
         </VStack>
       </VStack>
