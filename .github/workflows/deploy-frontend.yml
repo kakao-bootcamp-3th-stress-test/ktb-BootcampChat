@@ -46,6 +46,9 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    env:
+      SERVER: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
+      USERNAME: ${{ secrets.DOCKER_USERNAME }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -55,21 +58,17 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.DEPLOY_SERVERS_FRONTEND }} >> ~/.ssh/known_hosts 2>/dev/null
+          for server in $SERVER; do
+            ssh-keyscan -H $server >> ~/.ssh/known_hosts 2>/dev/null || true
+          done
 
-      - name: Copy docker-compose.yaml and deploy to servers
-        env:
-          SERVER: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
-          USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      - name: Deploy to servers
         run: |
           for server in $SERVER; do
-            if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "apps/frontend/docker-compose.yaml"; then
-              scp -i ~/.ssh/id_rsa apps/frontend/docker-compose.yaml ubuntu@$server:/home/ubuntu/
-            fi
-            ssh -i ~/.ssh/id_rsa ubuntu@$server "
+            ssh -i ~/.ssh/id_rsa ubuntu@$server bash << EOF
               cd /home/ubuntu
               export DOCKER_USERNAME=$USERNAME
-              docker pull $USERNAME/ktb-chat-frontend:latest
-              docker-compose up -d --force-recreate
-            "
+              sudo docker pull $USERNAME/ktb-chat-frontend:latest
+              sudo docker compose up -d --force-recreate
+            EOF
           done
