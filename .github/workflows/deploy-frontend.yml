@@ -65,5 +65,5 @@ jobs:
       - name: Deploy to servers
         run: |
           for server in $SERVER; do
-            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && export DOCKER_USERNAME=$USERNAME && sudo docker pull $USERNAME/ktb-chat-frontend:latest && sudo docker compose up -d --force-recreate"
+            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && export DOCKER_USERNAME=$USERNAME && sudo -E docker pull $USERNAME/ktb-chat-frontend:latest && sudo -E docker compose up -d --force-recreate"
           done
