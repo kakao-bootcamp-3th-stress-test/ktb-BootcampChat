@@ -1,6 +1,7 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.message;
 
 import java.util.Map;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

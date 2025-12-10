@@ -1,5 +1,6 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.rooms;
 
+import com.ktb.chatapp.dto.PageMetadata;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

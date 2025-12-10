@@ -1,8 +1,8 @@
 package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.ktb.chatapp.dto.FileResponse;
-import com.ktb.chatapp.dto.MessageResponse;
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.message.MessageResponse;
+import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.FileRepository;

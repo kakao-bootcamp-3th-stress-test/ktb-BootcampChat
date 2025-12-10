@@ -1,8 +1,9 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.rooms;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.ktb.chatapp.dto.user.UserResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

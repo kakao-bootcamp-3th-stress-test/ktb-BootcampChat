@@ -1,5 +1,6 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.user;
 
+import com.ktb.chatapp.dto.auth.AuthUserDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

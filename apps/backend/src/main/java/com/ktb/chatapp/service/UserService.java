@@ -1,8 +1,8 @@
 package com.ktb.chatapp.service;
 
-import com.ktb.chatapp.dto.ProfileImageResponse;
-import com.ktb.chatapp.dto.UpdateProfileRequest;
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.user.ProfileImageResponse;
+import com.ktb.chatapp.dto.user.UpdateProfileRequest;
+import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.util.FileUtil;

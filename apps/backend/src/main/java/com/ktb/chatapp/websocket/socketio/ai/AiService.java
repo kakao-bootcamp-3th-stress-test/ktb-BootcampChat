@@ -1,6 +1,6 @@
 package com.ktb.chatapp.websocket.socketio.ai;
 
-import com.ktb.chatapp.dto.MessageContent;
+import com.ktb.chatapp.dto.message.MessageContent;
 import com.ktb.chatapp.event.AiMessageCompleteEvent;
 import com.ktb.chatapp.event.AiMessageSavedEvent;
 import com.ktb.chatapp.event.AiMessageStartEvent;

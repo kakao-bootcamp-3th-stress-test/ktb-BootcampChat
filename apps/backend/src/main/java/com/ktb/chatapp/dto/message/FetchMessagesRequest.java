@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.message;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;

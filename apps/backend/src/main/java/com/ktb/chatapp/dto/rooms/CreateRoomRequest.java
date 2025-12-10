@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.rooms;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

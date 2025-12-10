@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.message;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;

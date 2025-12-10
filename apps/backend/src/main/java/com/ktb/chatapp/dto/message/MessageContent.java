@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.message;
 
 import java.util.*;
 import java.util.regex.Matcher;

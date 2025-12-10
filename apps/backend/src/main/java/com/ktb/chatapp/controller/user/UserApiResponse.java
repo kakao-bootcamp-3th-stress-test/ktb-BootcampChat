@@ -1,6 +1,6 @@
-package com.ktb.chatapp.controller;
+package com.ktb.chatapp.controller.user;
 
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.user.UserResponse;
 import lombok.Data;
 
 @Data

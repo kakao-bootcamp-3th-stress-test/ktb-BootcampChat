@@ -1,4 +1,4 @@
-package com.ktb.chatapp.controller;
+package com.ktb.chatapp.controller.user;
 
 import java.time.Instant;
 import lombok.Data;

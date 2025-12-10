@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.user;
 
 import com.ktb.chatapp.validation.ValidEmail;
 import com.ktb.chatapp.validation.ValidName;

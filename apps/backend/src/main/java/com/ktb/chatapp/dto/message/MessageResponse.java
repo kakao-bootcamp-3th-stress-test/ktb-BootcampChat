@@ -1,5 +1,7 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.message;
 
+import com.ktb.chatapp.dto.FileResponse;
+import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.AiType;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.MessageType;

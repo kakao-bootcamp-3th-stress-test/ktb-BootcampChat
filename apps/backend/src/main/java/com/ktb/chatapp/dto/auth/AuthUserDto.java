@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.auth;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

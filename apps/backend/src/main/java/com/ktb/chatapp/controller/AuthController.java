@@ -1,6 +1,12 @@
 package com.ktb.chatapp.controller;
 
 import com.ktb.chatapp.dto.*;
+import com.ktb.chatapp.dto.auth.AuthUserDto;
+import com.ktb.chatapp.dto.auth.TokenRefreshResponse;
+import com.ktb.chatapp.dto.auth.TokenVerifyResponse;
+import com.ktb.chatapp.dto.user.LoginRequest;
+import com.ktb.chatapp.dto.user.LoginResponse;
+import com.ktb.chatapp.dto.user.RegisterRequest;
 import com.ktb.chatapp.event.SessionEndedEvent;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;

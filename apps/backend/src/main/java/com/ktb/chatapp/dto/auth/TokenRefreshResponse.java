@@ -1,4 +1,4 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.auth;
 
 public record TokenRefreshResponse(
     boolean success,

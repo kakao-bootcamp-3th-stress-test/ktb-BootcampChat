@@ -1,9 +1,9 @@
-package com.ktb.chatapp.controller;
+package com.ktb.chatapp.controller.user;
 
 import com.ktb.chatapp.dto.StandardResponse;
-import com.ktb.chatapp.dto.ProfileImageResponse;
-import com.ktb.chatapp.dto.UpdateProfileRequest;
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.user.ProfileImageResponse;
+import com.ktb.chatapp.dto.user.UpdateProfileRequest;
+import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

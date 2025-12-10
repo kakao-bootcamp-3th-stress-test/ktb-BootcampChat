@@ -2,8 +2,8 @@ package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnEvent;
-import com.ktb.chatapp.dto.FetchMessagesRequest;
-import com.ktb.chatapp.dto.FetchMessagesResponse;
+import com.ktb.chatapp.dto.message.FetchMessagesRequest;
+import com.ktb.chatapp.dto.message.FetchMessagesResponse;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.websocket.socketio.SocketUser;

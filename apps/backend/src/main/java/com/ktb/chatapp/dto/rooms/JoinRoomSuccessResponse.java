@@ -1,5 +1,8 @@
-package com.ktb.chatapp.dto;
+package com.ktb.chatapp.dto.rooms;
 
+import com.ktb.chatapp.dto.ActiveStreamResponse;
+import com.ktb.chatapp.dto.message.MessageResponse;
+import com.ktb.chatapp.dto.user.UserResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
