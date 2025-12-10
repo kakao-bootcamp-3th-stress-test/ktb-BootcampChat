@@ -1,8 +1,8 @@
 package com.ktb.chatapp.controller;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,14 +11,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
 
     @GetMapping("/api/health")
-    public ResponseEntity<Map<String, Object>> health() {
-        // 부하테스트 최적화: 최소한의 응답만 반환
-        Map<String, Object> body = new HashMap<>();
-        body.put("status", "ok");
+    public ResponseEntity<String> health() {
+        // HashMap 생성 오버헤드 제거, 직접 JSON 문자열 반환
+        // 최소한의 메모리 할당과 직렬화 오버헤드
+        HttpHeaders headers = new HttpHeaders();
+        headers.setCacheControl(CacheControl.noCache().getHeaderValue());
         
-        // 캐시 헤더로 불필요한 재요청 방지
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noCache())
-                .body(body);
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .headers(headers)
+                .body("{\"status\":\"ok\"}");
     }
 }

@@ -16,16 +16,7 @@ const nextConfig = {
     experimental: {
       forceSwcTransforms: true
     }
-  }),
-  // ALB 헬스체크를 위한 rewrite
-  async rewrites() {
-    return [
-      {
-        source: '/health',
-        destination: '/api/health',
-      },
-    ];
-  }
+  })
 };
 
 module.exports = nextConfig;
