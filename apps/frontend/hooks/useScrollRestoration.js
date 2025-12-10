@@ -1,10 +1,10 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect } from "react";
 
 /**
  * 메시지 추가 시 스크롤 위치를 복원하는 훅
- * 
+ *
  * 채팅 메시지를 위에 추가할 때, 사용자가 보고 있던 메시지 위치를 유지합니다.
- * 
+ *
  * @param {Array} messages - 메시지 배열
  * @param {boolean} isLoading - 메시지 로딩 중 여부
  * @returns {Object} containerRef - 스크롤 컨테이너에 연결할 ref

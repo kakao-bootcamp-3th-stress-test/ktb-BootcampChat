@@ -1,25 +1,25 @@
-import React, { useState } from 'react';
-import { useRouter } from 'next/router';
-import { ErrorCircleIcon, CheckCircleIcon } from '@vapor-ui/icons';
+import React, { useState } from "react";
+import { useRouter } from "next/router";
+import { ErrorCircleIcon, CheckCircleIcon } from "@vapor-ui/icons";
 import {
-    Box,
-    Button,
-    Callout,
-    Field,
-    Form,
-    HStack,
-    Text,
-    TextInput,
-    VStack,
-} from '@vapor-ui/core';
-import { useAuth, withoutAuth } from '@/contexts/AuthContext';
+  Box,
+  Button,
+  Callout,
+  Field,
+  Form,
+  HStack,
+  Text,
+  TextInput,
+  VStack
+} from "@vapor-ui/core";
+import { useAuth, withoutAuth } from "@/contexts/AuthContext";
 
 const Register = () => {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: ""
   });
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -30,7 +30,7 @@ const Register = () => {
   const validateForm = () => {
     // 비밀번호 일치 확인만 추가 검증 (나머지는 HTML5 폼 검증)
     if (formData.password !== formData.confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.');
+      setError("비밀번호가 일치하지 않습니다.");
       return false;
     }
 
@@ -51,15 +51,15 @@ const Register = () => {
     try {
       const { name, email, password } = formData;
       await registerContext({ name, email, password });
-      
+
       setSuccess(true);
       setLoading(false);
-      
+
       setTimeout(() => {
-        router.push('/login');
+        router.push("/login");
       }, 1000);
     } catch (err) {
-      setError(err.message || '회원가입 처리 중 오류가 발생했습니다.');
+      setError(err.message || "회원가입 처리 중 오류가 발생했습니다.");
       setLoading(false);
     }
   };
@@ -75,7 +75,7 @@ const Register = () => {
         render={<Form onSubmit={handleSubmit} />}
       >
         <div className="text-center mb-4">
-          <img src="images/logo-h.png" class="w-1/2 mx-auto" />
+          <img src="images/logo-h.png" className="w-1/2 mx-auto" />
         </div>
 
         {error && (
@@ -102,7 +102,7 @@ const Register = () => {
               <Box
                 render={<Field.Label />}
                 flexDirection="column"
-                style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}
+                style={{ fontSize: "14px", fontWeight: "500", marginBottom: "8px" }}
               >
                 이름
                 <TextInput
@@ -112,7 +112,9 @@ const Register = () => {
                   required
                   disabled={loading}
                   value={formData.name}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, name: value }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, name: value }))
+                  }
                   placeholder="이름을 입력하세요"
                   data-testid="register-name-input"
                 />
@@ -124,7 +126,7 @@ const Register = () => {
               <Box
                 render={<Field.Label />}
                 flexDirection="column"
-                style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}
+                style={{ fontSize: "14px", fontWeight: "500", marginBottom: "8px" }}
               >
                 이메일
                 <TextInput
@@ -134,20 +136,24 @@ const Register = () => {
                   required
                   disabled={loading}
                   value={formData.email}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, email: value }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, email: value }))
+                  }
                   placeholder="이메일을 입력하세요"
                   data-testid="register-email-input"
                 />
               </Box>
               <Field.Error match="valueMissing">이메일을 입력해주세요.</Field.Error>
-              <Field.Error match="typeMismatch">유효한 이메일 형식이 아닙니다.</Field.Error>
+              <Field.Error match="typeMismatch">
+                유효한 이메일 형식이 아닙니다.
+              </Field.Error>
             </Field.Root>
 
             <Field.Root>
               <Box
                 render={<Field.Label />}
                 flexDirection="column"
-                style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}
+                style={{ fontSize: "14px", fontWeight: "500", marginBottom: "8px" }}
               >
                 비밀번호
                 <TextInput
@@ -157,22 +163,28 @@ const Register = () => {
                   required
                   disabled={loading}
                   value={formData.password}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, password: value }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, password: value }))
+                  }
                   placeholder="비밀번호를 입력하세요"
                   pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_]).{8,16}"
                   data-testid="register-password-input"
                 />
               </Box>
-              <Field.Description>8~16자, 대소문자 영문, 숫자, 특수문자 포함</Field.Description>
+              <Field.Description>
+                8~16자, 대소문자 영문, 숫자, 특수문자 포함
+              </Field.Description>
               <Field.Error match="valueMissing">비밀번호를 입력해주세요.</Field.Error>
-              <Field.Error match="patternMismatch">유효한 비밀번호 형식이 아닙니다.</Field.Error>
+              <Field.Error match="patternMismatch">
+                유효한 비밀번호 형식이 아닙니다.
+              </Field.Error>
             </Field.Root>
 
             <Field.Root>
               <Box
                 render={<Field.Label />}
                 flexDirection="column"
-                style={{ fontSize: '14px', fontWeight: '500', marginBottom: '8px' }}
+                style={{ fontSize: "14px", fontWeight: "500", marginBottom: "8px" }}
               >
                 비밀번호 확인
                 <TextInput
@@ -182,12 +194,16 @@ const Register = () => {
                   required
                   disabled={loading}
                   value={formData.confirmPassword}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, confirmPassword: value }))}
+                  onValueChange={(value) =>
+                    setFormData((prev) => ({ ...prev, confirmPassword: value }))
+                  }
                   placeholder="비밀번호를 다시 입력하세요"
                   data-testid="register-password-confirm-input"
                 />
               </Box>
-              <Field.Error match="valueMissing">비밀번호 확인을 입력해주세요.</Field.Error>
+              <Field.Error match="valueMissing">
+                비밀번호 확인을 입력해주세요.
+              </Field.Error>
             </Field.Root>
           </VStack>
 
@@ -197,7 +213,7 @@ const Register = () => {
             disabled={loading}
             data-testid="register-submit-button"
           >
-            {loading ? '회원가입 중...' : '회원가입'}
+            {loading ? "회원가입 중..." : "회원가입"}
           </Button>
         </VStack>
 
@@ -207,7 +223,7 @@ const Register = () => {
             type="button"
             size="sm"
             variant="ghost"
-            onClick={() => router.push('/')}
+            onClick={() => router.push("/")}
             disabled={loading}
           >
             로그인

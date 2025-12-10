@@ -1,8 +1,8 @@
 // components/EmojiPicker.js
 
-import React from 'react';
-import data from '@emoji-mart/data/sets/14/native';
-import Picker from '@emoji-mart/react';
+import React from "react";
+import data from "@emoji-mart/data/sets/14/native";
+import Picker from "@emoji-mart/react";
 
 function EmojiPicker({ onSelect }) {
   return (
