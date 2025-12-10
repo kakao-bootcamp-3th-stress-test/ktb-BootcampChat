@@ -3,7 +3,7 @@ name: Deploy Backend
 on:
   push:
     branches:
-      - ci-test
+      - ci-cd
     paths:
       - 'apps/backend/**'
       - '.github/workflows/deploy-backend.yml'
