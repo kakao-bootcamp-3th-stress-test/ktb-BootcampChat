@@ -94,8 +94,7 @@ jobs:
           set +x
           for server in $DEPLOY_SERVERS; do
             echo "Deploying to $server..."
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server << REMOTE_EOF
-              set +x
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@$server bash -s << 'REMOTE_EOF'
               cd /home/ubuntu
               export DOCKER_USERNAME=$DOCKER_USERNAME
               export MONGO_URI=$MONGO_URI
