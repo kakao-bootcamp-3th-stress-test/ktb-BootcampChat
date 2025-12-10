@@ -58,7 +58,9 @@ jobs:
           ENC_SALT: ${{ secrets.ENCRYPTION_SALT }}
         run: |
           for server in $SERVER; do
-            scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$server:/home/ubuntu/
+            if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "apps/backend/docker-compose.yaml"; then
+              scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$server:/home/ubuntu/
+            fi
             ssh -i ~/.ssh/id_rsa ubuntu@$server "
               cd /home/ubuntu
               export DOCKER_USERNAME=$USERNAME
