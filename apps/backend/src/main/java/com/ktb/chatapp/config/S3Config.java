@@ -30,7 +30,7 @@ public class S3Config {
     @Value("${app.file.s3.endpoint:}")
     private String endpoint;
 
-    @Value("${app.file.s3.path-style:true}")
+    @Value("${app.file.s3.path-style:false}")
     private boolean pathStyleAccess;
 
     @Bean
