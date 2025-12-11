@@ -41,7 +41,7 @@ jobs:
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.redis.yaml ubuntu@$SERVER:/home/ubuntu/
           
           # Deploy Redis stack
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker compose -f docker-compose.redis.yaml pull && sudo docker compose -f docker-compose.redis.yaml up -d --force-recreate"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && sudo docker compose -f docker-compose.redis.yaml down -v && sudo docker compose -f docker-compose.redis.yaml pull && sudo docker compose -f docker-compose.redis.yaml up -d"
           
           # Verify deployment
           sleep 10
