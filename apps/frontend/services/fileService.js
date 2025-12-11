@@ -106,8 +106,8 @@ class FileService {
       formData.append("contentType", file.type);
       formData.append("fileSize", file.size.toString());
 
-      // const source = CancelToken.source();
-      // this.activeUploads.set(file.name, source);
+      const source = CancelToken.source();
+      this.activeUploads.set(file.name, source);
 
       const response = await axiosInstance.post(uploadUrl, formData, {
         headers: {

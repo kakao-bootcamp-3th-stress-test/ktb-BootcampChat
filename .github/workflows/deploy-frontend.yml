@@ -81,5 +81,5 @@ jobs:
             [ -n "$server" ] || continue
             ssh-keyscan -H "$server" >> ~/.ssh/known_hosts 2>/dev/null || true
             echo "Deploying to $server..."
-            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && export DOCKER_USERNAME=$USERNAME && sudo -E docker pull $USERNAME/ktb-chat-frontend:latest && sudo -E docker compose up -d --force-recreate"
+            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && sudo docker image prune -a -f && export DOCKER_USERNAME=$USERNAME && sudo -E docker pull $USERNAME/ktb-chat-frontend:latest && sudo -E docker compose up -d --force-recreate"
           done
