@@ -75,6 +75,8 @@ make verify-java
 | `FILE_S3_SECRET_KEY` | ✅ | 없음 | S3 시크릿 키 |
 | `FILE_S3_PATH_STYLE` | ❌ | `false` | MinIO 등 path-style이 필요한 경우 `true` |
 | `FILE_PUBLIC_BASE_URL` | ❌ | CloudFront 배포 URL | 파일 접근용 베이스 URL |
+| `SOCKETIO_STORE` | ❌ | `redis` | Socket.IO 메타데이터 저장소 (`redis`/`local`) |
+| `SOCKETIO_STORE_TTL_SECONDS` | ❌ | `86400` | Redis에 저장된 소켓 상태 TTL(초) |
 
 `.env.template` 파일을 복사해 기본 값을 채운 뒤 필요에 따라 수정하세요. `make setup-env` 명령어로 자동 생성할 수도 있습니다.
 
