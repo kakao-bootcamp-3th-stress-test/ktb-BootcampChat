@@ -15,6 +15,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MessageRepository extends MongoRepository<Message, String> {
     Page<Message> findByRoomIdAndIsDeletedAndTimestampBefore(String roomId, Boolean isDeleted, LocalDateTime timestamp, Pageable pageable);
+
+    @Query(
+        value = "{ 'room': ?0, 'isDeleted': ?1, 'timestamp': { $lt: ?2 } }",
+        fields = "{ '_id': 1, 'room': 1, 'content': 1, 'sender': 1, 'type': 1, 'file': 1, 'timestamp': 1, 'metadata': 1, 'reactions': 1, 'readers': 1 }")
+    Page<Message> findSlimMessagesBefore(String roomId, Boolean isDeleted, LocalDateTime before, Pageable pageable);
     /**
      * 특정 시간 이후의 메시지 수 카운트 (삭제되지 않은 메시지만)
      * 최근 N분간 메시지 수를 조회할 때 사용

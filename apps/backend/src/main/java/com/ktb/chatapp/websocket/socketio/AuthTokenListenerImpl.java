@@ -6,6 +6,7 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.JwtService;
+import com.ktb.chatapp.service.UserLookupService;
 import com.ktb.chatapp.websocket.socketio.handler.ConnectionLoginHandler;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class AuthTokenListenerImpl implements AuthTokenListener {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final ObjectProvider<ConnectionLoginHandler> socketIOChatHandlerProvider;
+    private final UserLookupService userLookupService;
 
     @Override
     public AuthTokenResult getAuthTokenResult(Object _authToken, SocketIOClient client) {
@@ -54,6 +56,7 @@ public class AuthTokenListenerImpl implements AuthTokenListener {
             }
 
             log.info("Socket.IO connection authorized for user: {} ({})", user.getName(), userId);
+            userLookupService.cacheUser(user);
             
             var socketUser = new SocketUser(user.getId(), user.getName(), client.getSessionId().toString());
             socketIOChatHandlerProvider.getObject().onConnect(client, socketUser);

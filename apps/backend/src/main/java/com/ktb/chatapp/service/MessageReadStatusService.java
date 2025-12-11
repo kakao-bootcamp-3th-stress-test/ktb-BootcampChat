@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.mongodb.core.BulkOperations;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -39,17 +38,13 @@ public class MessageReadStatusService {
                     .readAt(LocalDateTime.now())
                     .build();
 
-            BulkOperations ops = mongoTemplate.bulkOps(BulkOperations.BulkMode.UNORDERED, Message.class);
-            for (String messageId : messageIds) {
-                Query query = new Query(Criteria.where("_id").is(messageId)
-                        .and("readers.userId").ne(userId));
-                Update update = new Update().addToSet("readers", readerInfo);
-                ops.updateOne(query, update);
-            }
+            Query query = new Query(Criteria.where("_id").in(messageIds)
+                    .and("readers.userId").ne(userId));
+            Update update = new Update().addToSet("readers", readerInfo);
 
-            var result = ops.execute();
-            log.debug("Read status bulk update - matched: {}, modified: {}, user: {}",
-                    result.getMatchedCount(), result.getModifiedCount(), userId);
+            var result = mongoTemplate.updateMulti(query, update, Message.class);
+            log.debug("Read status bulk update - matched: {}, modified: {}, user: {}, batchSize: {}",
+                    result.getMatchedCount(), result.getModifiedCount(), userId, messageIds.size());
 
         } catch (Exception e) {
             log.error("Read status update error for user {}", userId, e);

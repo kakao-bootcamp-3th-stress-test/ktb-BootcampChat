@@ -15,16 +15,18 @@ services:
       - mongo-network
 
   mongodb-exporter:
-    image: percona/mongodb_exporter:0.20.9
+    image: percona/mongodb_exporter:0.40
     container_name: mongodb-exporter
     restart: unless-stopped
     ports:
       - "9216:9216"
     command:
       - '--mongodb.uri=mongodb://mongo:27017'
+      - '--discovering-mode'
       - '--collector.collstats'
       - '--collector.indexstats'
-      - '--discovering-mode'
+      - '--collector.diagnosticdata'
+      - '--compatible-mode'
     depends_on:
       - mongo
     networks:
