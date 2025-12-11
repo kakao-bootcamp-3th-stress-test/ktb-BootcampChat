@@ -1,7 +1,6 @@
 package com.ktb.chatapp.dto.message;
 
 import com.ktb.chatapp.dto.FileResponse;
-import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.AiType;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.MessageType;
@@ -30,7 +29,7 @@ public class MessageResponse {
     
     private String content;
     
-    private UserResponse sender;
+    private String senderId;
     
     private MessageType type;
     

@@ -3,11 +3,10 @@ package com.ktb.chatapp.websocket.socketio.handler;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnEvent;
-import com.ktb.chatapp.dto.message.ChatMessageRequest;
 import com.ktb.chatapp.dto.FileResponse;
+import com.ktb.chatapp.dto.message.ChatMessageRequest;
 import com.ktb.chatapp.dto.message.MessageContent;
 import com.ktb.chatapp.dto.message.MessageResponse;
-import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.*;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
@@ -162,7 +161,7 @@ public class ChatMessageHandler {
             Message savedMessage = messageRepository.save(message);
 
             socketIOServer.getRoomOperations(roomId)
-                    .sendEvent(MESSAGE, createMessageResponse(savedMessage, sender));
+                    .sendEvent(MESSAGE, createMessageResponse(savedMessage));
 
             // AI 멘션 처리
             aiService.handleAIMentions(roomId, socketUser.id(), messageContent);
@@ -234,7 +233,7 @@ public class ChatMessageHandler {
         return message;
     }
 
-    private MessageResponse createMessageResponse(Message message, User sender) {
+    private MessageResponse createMessageResponse(Message message) {
         var messageResponse = new MessageResponse();
         messageResponse.setId(message.getId());
         messageResponse.setRoomId(message.getRoomId());
@@ -242,7 +241,7 @@ public class ChatMessageHandler {
         messageResponse.setType(message.getType());
         messageResponse.setTimestamp(message.toTimestampMillis());
         messageResponse.setReactions(message.getReactions() != null ? message.getReactions() : Collections.emptyMap());
-        messageResponse.setSender(UserResponse.from(sender));
+        messageResponse.setSenderId(message.getSenderId());
         messageResponse.setMetadata(message.getMetadata());
 
         if (message.getFileId() != null) {
