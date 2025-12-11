@@ -10,7 +10,7 @@ Spring Boot 3.5와 Java 21을 사용해 구축한 실시간 채팅 백엔드입�
 - Spring Security + JWT, 커스텀 레이트 리미터
 - Spring AI(OpenAI) 기반 대화형 응답 생성
 - Testcontainers, JUnit 5, Reactor Test를 이용한 검증
-
+ 
 ## 프로젝트 구조
 ```text
 src/main/java/com/ktb/chatapp

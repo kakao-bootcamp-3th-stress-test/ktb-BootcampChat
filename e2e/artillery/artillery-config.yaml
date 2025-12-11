@@ -11,7 +11,7 @@ config:
         headless: true
         slowMo: 100
       contextOptions:
-        viewport: null
+        viewport: null 
 
 scenarios:
   - engine: playwright
