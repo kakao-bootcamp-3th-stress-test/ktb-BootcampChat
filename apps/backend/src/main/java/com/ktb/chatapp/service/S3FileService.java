@@ -10,6 +10,7 @@ import com.ktb.chatapp.util.FileUtil;
 import java.io.IOException;
 import java.net.URI;
 import java.time.LocalDateTime;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,8 +34,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  */
 @Slf4j
 @Service
-@ConditionalOnProperty(prefix = "app.file", name = "storage", havingValue = "s3")
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "app.file", name = "storage", havingValue = "s3")
 public class S3FileService implements FileService {
 
     private final S3Client s3Client;
@@ -45,8 +46,16 @@ public class S3FileService implements FileService {
     @Value("${app.file.s3.bucket}")
     private String bucketName;
 
-    @Value("${app.file.public-base-url}")
+    @Value("${app.file.public-base-url:}")
     private String publicBaseUrl;
+
+    @PostConstruct
+    public void validateConfiguration() {
+        if (!StringUtils.hasText(bucketName)) {
+            throw new IllegalStateException("S3 bucket name must be configured. Set FILE_S3_BUCKET environment variable.");
+        }
+        log.info("S3FileService initialized with bucket: {}", bucketName);
+    }
 
     @Override
     public FileUploadResult uploadFile(MultipartFile file, String uploaderId) {
