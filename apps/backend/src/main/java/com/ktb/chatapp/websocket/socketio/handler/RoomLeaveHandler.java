@@ -12,6 +12,7 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.time.LocalDateTime;
@@ -42,10 +43,12 @@ public class RoomLeaveHandler {
     private final UserRepository userRepository;
     private final UserRooms userRooms;
     private final MessageResponseMapper messageResponseMapper;
+    private final SocketConnectionTracker connectionTracker;
     
     @OnEvent(LEAVE_ROOM)
     public void handleLeaveRoom(SocketIOClient client, String roomId) {
         try {
+            connectionTracker.touch(client);
             String userId = getUserId(client);
             String userName = getUserName(client);
 
@@ -104,7 +107,7 @@ public class RoomLeaveHandler {
             systemMessage.setMetadata(new HashMap<>());
 
             Message savedMessage = messageRepository.save(systemMessage);
-            MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage, null);
+            MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage);
 
             socketIOServer.getRoomOperations(roomId)
                     .sendEvent(MESSAGE, response);

@@ -56,15 +56,37 @@ const ChatMessages = ({
     loadingMessages,
     100 // 하단 100px 이내면 자동 스크롤
   );
+  // senderId로 participants에서 사용자 정보 찾기
+  const getSenderFromParticipants = useCallback(
+    (senderId) => {
+      if (!senderId || !room?.participants) return null;
+
+      return room.participants.find(
+        (p) => p._id === senderId || p.id === senderId
+      );
+    },
+    [room?.participants]
+  );
+
   const isMine = useCallback(
     (msg) => {
-      if (!msg?.sender || !currentUser?.id) return false;
+      if (!currentUser?.id) return false;
 
-      return (
-        msg.sender._id === currentUser.id ||
-        msg.sender.id === currentUser.id ||
-        msg.sender === currentUser.id
-      );
+      // senderId가 있으면 직접 비교
+      if (msg?.senderId) {
+        return msg.senderId === currentUser.id;
+      }
+
+      // 레거시: sender 객체가 있는 경우
+      if (msg?.sender) {
+        return (
+          msg.sender._id === currentUser.id ||
+          msg.sender.id === currentUser.id ||
+          msg.sender === currentUser.id
+        );
+      }
+
+      return false;
     },
     [currentUser?.id]
   );
@@ -81,6 +103,15 @@ const ChatMessages = ({
   const renderMessage = useCallback(
     (msg, idx) => {
       if (!msg) return null;
+
+      // senderId가 있고 sender가 없으면 participants에서 찾아서 추가
+      const enrichedMsg = { ...msg };
+      if (msg.senderId && !msg.sender) {
+        const sender = getSenderFromParticipants(msg.senderId);
+        if (sender) {
+          enrichedMsg.sender = sender;
+        }
+      }
 
       const commonProps = {
         currentUser,
@@ -99,15 +130,15 @@ const ChatMessages = ({
         <MessageComponent
           key={msg._id || `msg-${idx}`}
           {...commonProps}
-          msg={msg}
-          content={msg.content}
-          isMine={msg.type !== "system" ? isMine(msg) : undefined}
-          isStreaming={msg.type === "ai" ? msg.isStreaming || false : undefined}
+          msg={enrichedMsg}
+          content={enrichedMsg.content}
+          isMine={msg.type !== "system" ? isMine(enrichedMsg) : undefined}
+          isStreaming={msg.type === "ai" ? enrichedMsg.isStreaming || false : undefined}
           socketRef={socketRef}
         />
       );
     },
-    [currentUser, room, isMine, onReactionAdd, onReactionRemove, socketRef]
+    [currentUser, room, isMine, onReactionAdd, onReactionRemove, socketRef, getSenderFromParticipants]
   );
 
   return (

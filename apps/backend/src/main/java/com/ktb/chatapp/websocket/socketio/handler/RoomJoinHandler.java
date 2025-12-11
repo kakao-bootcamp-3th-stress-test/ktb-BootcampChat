@@ -13,6 +13,7 @@ import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.time.LocalDateTime;
@@ -41,11 +42,12 @@ public class RoomJoinHandler {
     private final UserRooms userRooms;
     private final MessageLoader messageLoader;
     private final MessageResponseMapper messageResponseMapper;
-    private final RoomLeaveHandler roomLeaveHandler;
+    private final SocketConnectionTracker connectionTracker;
     
     @OnEvent(JOIN_ROOM)
     public void handleJoinRoom(SocketIOClient client, String roomId) {
         try {
+            connectionTracker.touch(client);
             String userId = getUserId(client);
             String userName = getUserName(client);
 
@@ -125,7 +127,7 @@ public class RoomJoinHandler {
 
             // 입장 메시지 브로드캐스트
             socketIOServer.getRoomOperations(roomId)
-                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage, null));
+                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage));
 
             // 참가자 목록 업데이트 브로드캐스트
             socketIOServer.getRoomOperations(roomId)
@@ -139,6 +141,23 @@ public class RoomJoinHandler {
             client.sendEvent(JOIN_ROOM_ERROR, Map.of(
                 "message", e.getMessage() != null ? e.getMessage() : "채팅방 입장에 실패했습니다."
             ));
+        }
+    }
+
+    public void restoreExistingMembership(SocketIOClient client, String roomId) {
+        try {
+            connectionTracker.touch(client);
+            String userId = getUserId(client);
+            if (userId == null) {
+                return;
+            }
+            client.joinRoom(roomId);
+            if (!userRooms.isInRoom(userId, roomId)) {
+                userRooms.add(userId, roomId);
+            }
+            log.debug("Restored room {} for user {}", roomId, userId);
+        } catch (Exception e) {
+            log.warn("Failed to restore room {}: {}", roomId, e.getMessage());
         }
     }
     

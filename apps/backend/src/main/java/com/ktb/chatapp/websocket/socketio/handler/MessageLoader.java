@@ -4,14 +4,10 @@ import com.ktb.chatapp.dto.message.FetchMessagesRequest;
 import com.ktb.chatapp.dto.message.FetchMessagesResponse;
 import com.ktb.chatapp.dto.message.MessageResponse;
 import com.ktb.chatapp.model.Message;
-import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
-import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
-import jakarta.annotation.Nullable;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,7 +24,6 @@ import static java.util.Collections.emptyList;
 public class MessageLoader {
 
     private final MessageRepository messageRepository;
-    private final UserRepository userRepository;
     private final MessageResponseMapper messageResponseMapper;
     private final MessageReadStatusService messageReadStatusService;
 
@@ -69,11 +64,8 @@ public class MessageLoader {
         
         // 메시지 응답 생성
         List<MessageResponse> messageResponses = sortedMessages.stream()
-                .map(message -> {
-                    var user = findUserById(message.getSenderId());
-                    return messageResponseMapper.mapToMessageResponse(message, user);
-                })
-                .collect(Collectors.toList());
+                .map(messageResponseMapper::mapToMessageResponse)
+                .toList();
 
         boolean hasMore = messagePage.hasNext();
 
@@ -86,15 +78,4 @@ public class MessageLoader {
                 .build();
     }
 
-    /**
-     * AI 경우 null 반환 가능
-     */
-    @Nullable
-    private User findUserById(String id) {
-        if (id == null) {
-            return null;
-        }
-        return userRepository.findById(id)
-                .orElse(null);
-    }
 }

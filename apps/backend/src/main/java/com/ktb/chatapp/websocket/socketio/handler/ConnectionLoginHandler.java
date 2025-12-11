@@ -4,6 +4,7 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnDisconnect;
 import com.ktb.chatapp.websocket.socketio.ConnectedUsers;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import io.micrometer.core.instrument.Gauge;
@@ -12,6 +13,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -33,6 +36,7 @@ public class ConnectionLoginHandler {
     private final UserRooms userRooms;
     private final RoomJoinHandler roomJoinHandler;
     private final RoomLeaveHandler roomLeaveHandler;
+    private final SocketConnectionTracker connectionTracker;
 
     public ConnectionLoginHandler(
             SocketIOServer socketIOServer,
@@ -40,12 +44,14 @@ public class ConnectionLoginHandler {
             UserRooms userRooms,
             RoomJoinHandler roomJoinHandler,
             RoomLeaveHandler roomLeaveHandler,
+            SocketConnectionTracker connectionTracker,
             MeterRegistry meterRegistry) {
         this.socketIOServer = socketIOServer;
         this.connectedUsers = connectedUsers;
         this.userRooms = userRooms;
         this.roomJoinHandler = roomJoinHandler;
         this.roomLeaveHandler = roomLeaveHandler;
+        this.connectionTracker = connectionTracker;
 
         // Register gauge metric for concurrent users
         Gauge.builder("socketio.concurrent.users", connectedUsers::size)
@@ -62,10 +68,12 @@ public class ConnectionLoginHandler {
         try {
             notifyDuplicateLogin(client, userId);
             client.set("user", user);
+            connectionTracker.register(client, user);
+            connectionTracker.touch(client);
             
             userRooms.get(userId).forEach(roomId -> {
-                // 재접속 시 기존 참여 방 재입장 처리
-                roomJoinHandler.handleJoinRoom(client, roomId);
+                // 재접속 시 소켓 방만 재참여 (DB 갱신 없이)
+                roomJoinHandler.restoreExistingMembership(client, roomId);
             });
             
             connectedUsers.set(userId, user);
@@ -117,6 +125,8 @@ public class ConnectionLoginHandler {
             client.sendEvent(ERROR, Map.of(
                 "message", "연결 종료 처리 중 오류가 발생했습니다."
             ));
+        } finally {
+            connectionTracker.unregister(client);
         }
         
     }
@@ -144,8 +154,7 @@ public class ConnectionLoginHandler {
         if (socketUser == null) {
             return;
         }
-        String existingSocketId = socketUser.socketId();
-        SocketIOClient existingClient = socketIOServer.getClient(UUID.fromString(existingSocketId));
+        SocketIOClient existingClient = socketIOServer.getClient(UUID.fromString(socketUser.socketId()));
         if (existingClient == null) {
             return;
         }
@@ -158,17 +167,12 @@ public class ConnectionLoginHandler {
                 "timestamp", System.currentTimeMillis()
         ));
         
-        new Thread(() -> {
-            try {
-                Thread.sleep(Duration.ofSeconds(10));
-                existingClient.sendEvent(SESSION_ENDED, Map.of(
-                        "reason", "duplicate_login",
-                        "message", "다른 기기에서 로그인하여 현재 세션이 종료되었습니다."
-                ));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Error in duplicate login notification thread", e);
-            }
-        }).start();
+        CompletableFuture.runAsync(() -> existingClient.sendEvent(SESSION_ENDED, Map.of(
+                "reason", "duplicate_login",
+                "message", "다른 기기에서 로그인하여 현재 세션이 종료되었습니다."
+        )), CompletableFuture.delayedExecutor(10, TimeUnit.SECONDS));
+
+        CompletableFuture.runAsync(existingClient::disconnect,
+                CompletableFuture.delayedExecutor(11, TimeUnit.SECONDS));
     }
 }
