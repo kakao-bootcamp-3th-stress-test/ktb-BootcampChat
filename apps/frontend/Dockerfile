@@ -42,4 +42,4 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Node.js 최적화 플래그 (부하테스트용)
-CMD ["node", "server.js"]
+CMD ["node", "--max-old-space-size=1024", "server.js"]
