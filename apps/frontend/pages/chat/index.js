@@ -300,10 +300,13 @@ function ChatRoomsComponent() {
 
         setHasMore(data.length === pageSize && metadata.hasMore);
 
-        // API 호출 성공 시 연결 상태를 CONNECTED로 설정
-        if (connectionStatus !== CONNECTION_STATUS.CONNECTED) {
-          setConnectionStatus(CONNECTION_STATUS.CONNECTED);
-        }
+        // API 호출 성공 시 연결 상태를 CONNECTED로 설정 (최초 1회만)
+        setConnectionStatus((prevStatus) => {
+          if (prevStatus !== CONNECTION_STATUS.CONNECTED) {
+            return CONNECTION_STATUS.CONNECTED;
+          }
+          return prevStatus;
+        });
         setRetryCount(0);
 
         if (isInitialLoad) {
@@ -319,7 +322,7 @@ function ChatRoomsComponent() {
         isLoadingRef.current = false;
       }
     },
-    [currentUser, pageIndex, pageSize, sorting, isInitialLoad, connectionStatus]
+    [currentUser, pageIndex, pageSize, sorting, isInitialLoad, handleFetchError]
   );
 
   // fetchRooms ref를 항상 최신 상태로 유지
@@ -357,10 +360,13 @@ function ChatRoomsComponent() {
 
         setHasMore(newRooms.length === pageSize && metadata.hasMore);
 
-        // API 호출 성공 시 연결 상태를 CONNECTED로 설정
-        if (connectionStatus !== CONNECTION_STATUS.CONNECTED) {
-          setConnectionStatus(CONNECTION_STATUS.CONNECTED);
-        }
+        // API 호출 성공 시 연결 상태를 CONNECTED로 설정 (최초 1회만)
+        setConnectionStatus((prevStatus) => {
+          if (prevStatus !== CONNECTION_STATUS.CONNECTED) {
+            return CONNECTION_STATUS.CONNECTED;
+          }
+          return prevStatus;
+        });
         setRetryCount(0);
       }
     } catch (error) {
@@ -394,9 +400,7 @@ function ChatRoomsComponent() {
       } catch (error) {
         if (isMounted && fetchRoomsRef.current) {
           setTimeout(() => {
-            if (connectionStatus === CONNECTION_STATUS.CHECKING) {
-              fetchRoomsRef.current(false);
-            }
+            fetchRoomsRef.current(false);
           }, 3000);
         }
       }
@@ -407,7 +411,7 @@ function ChatRoomsComponent() {
     return () => {
       isMounted = false;
     };
-  }, [currentUser?.token, connectionStatus]);
+  }, [currentUser?.token]);
 
   // 네트워크 상태 모니터링
   useEffect(() => {
