@@ -2,6 +2,10 @@ package com.ktb.chatapp.websocket.socketio;
 
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
+import com.corundumstudio.socketio.SocketIOClient;
+import com.corundumstudio.socketio.SocketIOServer;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -25,6 +29,7 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.SESSION_ENDED;
 public class SocketConnectionTracker {
 
     private final SocketIOServer socketIOServer;
+    private final MeterRegistry meterRegistry;
 
     @Value("${socketio.connection.max-idle-ms:300000}")
     private long maxIdleMs;
@@ -53,24 +58,31 @@ public class SocketConnectionTracker {
         }
     }
 
-    @Scheduled(fixedDelayString = "${socketio.connection.cleanup-interval-ms:60000}")
+    @Scheduled(
+            fixedDelayString = "${socketio.connection.cleanup-interval-ms:60000}",
+            scheduler = "socketIdleCleanupScheduler")
     public void cleanupIdleConnections() {
+        Timer.Sample sample = Timer.start(meterRegistry);
         long now = System.currentTimeMillis();
-        connections.forEach((socketId, info) -> {
-            if (now - info.getLastSeen() > maxIdleMs) {
-                log.warn("Closing idle socket {} for user {} (idle {} sec)",
-                        socketId, info.getUserId(), Duration.ofMillis(now - info.getLastSeen()).toSeconds());
-                connections.remove(socketId);
-                var client = socketIOServer.getClient(UUID.fromString(socketId));
-                if (client != null) {
-                    client.sendEvent(SESSION_ENDED, Map.of(
-                            "reason", "idle_timeout",
-                            "message", "장시간 활동이 없어 연결이 종료되었습니다."
-                    ));
-                    client.disconnect();
+        try {
+            connections.forEach((socketId, info) -> {
+                if (now - info.getLastSeen() > maxIdleMs) {
+                    log.warn("Closing idle socket {} for user {} (idle {} sec)",
+                            socketId, info.getUserId(), Duration.ofMillis(now - info.getLastSeen()).toSeconds());
+                    connections.remove(socketId);
+                    var client = socketIOServer.getClient(UUID.fromString(socketId));
+                    if (client != null) {
+                        client.sendEvent(SESSION_ENDED, Map.of(
+                                "reason", "idle_timeout",
+                                "message", "장시간 활동이 없어 연결이 종료되었습니다."
+                        ));
+                        client.disconnect();
+                    }
                 }
-            }
-        });
+            });
+        } finally {
+            sample.stop(meterRegistry.timer("socketio.connection.cleanup.time"));
+        }
     }
 
     private static final class ConnectionInfo {
