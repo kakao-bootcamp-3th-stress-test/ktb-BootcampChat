@@ -2,6 +2,7 @@ package com.ktb.chatapp.dto.rooms;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.ktb.chatapp.dto.user.UserResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -33,7 +34,11 @@ public class RoomResponse {
     private UserResponse creator;
 
     @Schema(description = "참여자 목록")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<UserResponse> participants;
+
+    @JsonIgnore
+    private Integer participantsCount;
 
     @JsonIgnore
     private LocalDateTime createdAtDateTime;
@@ -47,6 +52,9 @@ public class RoomResponse {
     @Schema(description = "참여자 수", example = "5")
     @JsonGetter("participantsCount")
     public int getParticipantsCount() {
+        if (participantsCount != null) {
+            return participantsCount;
+        }
         return participants != null ? participants.size() : 0;
     }
 

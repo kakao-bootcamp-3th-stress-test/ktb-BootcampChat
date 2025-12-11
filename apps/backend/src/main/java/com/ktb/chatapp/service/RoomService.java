@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,11 +83,11 @@ public class RoomService {
 
             // Room을 RoomResponse로 변환
             List<Room> rooms = roomPage.getContent();
-            Map<String, User> usersById = loadUsersForRooms(rooms);
+            Map<String, User> usersById = loadUsersForRooms(rooms, false);
             Map<String, Long> recentCounts = loadRecentMessageCounts(rooms);
 
             List<RoomResponse> roomResponses = rooms.stream()
-                .map(room -> mapToRoomResponse(room, name, usersById, recentCounts))
+                .map(room -> mapToRoomResponse(room, name, usersById, recentCounts, false))
                 .collect(Collectors.toList());
 
             // 메타데이터 생성
@@ -184,9 +183,9 @@ public class RoomService {
         
         // Publish event for room created
         try {
-            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom));
+            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom), true);
             Map<String, Long> recentCounts = loadRecentMessageCounts(List.of(savedRoom));
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts);
+            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts, true);
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
@@ -225,9 +224,9 @@ public class RoomService {
         
         // Publish event for room updated
         try {
-            Map<String, User> usersById = loadUsersForRooms(List.of(room));
+            Map<String, User> usersById = loadUsersForRooms(List.of(room), true);
             Map<String, Long> recentCounts = loadRecentMessageCounts(List.of(room));
-            RoomResponse roomResponse = mapToRoomResponse(room, name, usersById, recentCounts);
+            RoomResponse roomResponse = mapToRoomResponse(room, name, usersById, recentCounts, true);
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
         } catch (Exception e) {
             log.error("roomUpdate 이벤트 발행 실패", e);
@@ -240,15 +239,18 @@ public class RoomService {
             Room room,
             String requesterIdentity,
             Map<String, User> usersById,
-            Map<String, Long> recentCounts) {
+            Map<String, Long> recentCounts,
+            boolean includeParticipants) {
         if (room == null) return null;
 
         User creator = room.getCreator() != null ? usersById.get(room.getCreator()) : null;
 
-        List<User> participants = room.getParticipantIds().stream()
-            .map(usersById::get)
-            .filter(java.util.Objects::nonNull)
-            .toList();
+        List<User> participants = includeParticipants && room.getParticipantIds() != null
+            ? room.getParticipantIds().stream()
+                .map(usersById::get)
+                .filter(java.util.Objects::nonNull)
+                .toList()
+            : List.of();
 
         long recentMessageCount = recentCounts.getOrDefault(room.getId(), 0L);
 
@@ -261,14 +263,17 @@ public class RoomService {
                 .name(creator.getName() != null ? creator.getName() : "알 수 없음")
                 .email(creator.getEmail() != null ? creator.getEmail() : "")
                 .build() : null)
-            .participants(participants.stream()
-                .filter(p -> p != null && p.getId() != null)
-                .map(p -> UserResponse.builder()
-                    .id(p.getId())
-                    .name(p.getName() != null ? p.getName() : "알 수 없음")
-                    .email(p.getEmail() != null ? p.getEmail() : "")
-                    .build())
-                .collect(Collectors.toList()))
+            .participants(includeParticipants
+                ? participants.stream()
+                    .filter(p -> p != null && p.getId() != null)
+                    .map(p -> UserResponse.builder()
+                        .id(p.getId())
+                        .name(p.getName() != null ? p.getName() : "알 수 없음")
+                        .email(p.getEmail() != null ? p.getEmail() : "")
+                        .build())
+                    .collect(Collectors.toList())
+                : null)
+            .participantsCount(room.getParticipantIds() != null ? room.getParticipantIds().size() : 0)
             .createdAtDateTime(room.getCreatedAt())
             .isCreator(creator != null && creator.getEmail() != null &&
                 creator.getEmail().equalsIgnoreCase(requesterIdentity))
@@ -276,7 +281,7 @@ public class RoomService {
             .build();
     }
 
-    private Map<String, User> loadUsersForRooms(List<Room> rooms) {
+    private Map<String, User> loadUsersForRooms(List<Room> rooms, boolean includeParticipants) {
         if (rooms == null || rooms.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -285,7 +290,7 @@ public class RoomService {
             if (room.getCreator() != null) {
                 userIds.add(room.getCreator());
             }
-            if (room.getParticipantIds() != null) {
+            if (includeParticipants && room.getParticipantIds() != null) {
                 userIds.addAll(room.getParticipantIds());
             }
         }
