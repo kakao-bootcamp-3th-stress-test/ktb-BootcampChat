@@ -6,14 +6,12 @@ import com.corundumstudio.socketio.annotation.OnEvent;
 import com.ktb.chatapp.dto.MarkAsReadRequest;
 import com.ktb.chatapp.dto.message.MessagesReadResponse;
 import com.ktb.chatapp.model.Message;
-import com.ktb.chatapp.model.Room;
-import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
-import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
+import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +34,7 @@ public class MessageReadHandler {
     private final MessageReadStatusService messageReadStatusService;
     private final MessageRepository messageRepository;
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
+    private final UserRooms userRooms;
     private final SocketConnectionTracker connectionTracker;
     
     @OnEvent(MARK_MESSAGES_AS_READ)
@@ -61,14 +59,7 @@ public class MessageReadHandler {
                 return;
             }
 
-            User user = userRepository.findById(userId).orElse(null);
-            if (user == null) {
-                client.sendEvent(ERROR, Map.of("message", "User not found"));
-                return;
-            }
-
-            Room room = roomRepository.findById(roomId).orElse(null);
-            if (room == null || !room.getParticipantIds().contains(userId)) {
+            if (!hasRoomAccess(userId, roomId)) {
                 client.sendEvent(ERROR, Map.of("message", "Room access denied"));
                 return;
             }
@@ -92,5 +83,16 @@ public class MessageReadHandler {
     private String getUserId(SocketIOClient client) {
         var user = (SocketUser) client.get("user");
         return user != null ? user.id() : null;
+    }
+
+    private boolean hasRoomAccess(String userId, String roomId) {
+        if (userRooms.isInRoom(userId, roomId)) {
+            return true;
+        }
+        boolean exists = roomRepository.existsByIdAndParticipantIdsContaining(roomId, userId);
+        if (exists) {
+            userRooms.add(userId, roomId);
+        }
+        return exists;
     }
 }
