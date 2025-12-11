@@ -65,7 +65,7 @@ jobs:
             echo "servers=${{ inputs.deploy_servers }}" >> $GITHUB_OUTPUT
           else
             SERVERS=$(aws ec2 describe-instances \
-              --filters "Name=tag:Component,Values=backend" "Name=instance-state-name,Values=running" \
+              --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --output text | tr '\t' ' ')
             echo "servers=$SERVERS" >> $GITHUB_OUTPUT

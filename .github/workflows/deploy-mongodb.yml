@@ -27,7 +27,7 @@ jobs:
         id: get-ips
         run: |
           SERVER=$(aws ec2 describe-instances \
-            --filters "Name=tag:Component,Values=mongodb" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Role,Values=mongodb" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --output text)
           echo "server=$SERVER" >> $GITHUB_OUTPUT
