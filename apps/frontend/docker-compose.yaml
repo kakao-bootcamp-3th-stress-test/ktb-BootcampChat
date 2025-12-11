@@ -1,0 +1,26 @@
+services:
+  frontend:
+    image: ${DOCKER_USERNAME}/ktb-chat-frontend:latest
+    container_name: ktb-chat-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_TELEMETRY_DISABLED=1
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - frontend-network
+
+networks:
+  frontend-network:
+    driver: bridge

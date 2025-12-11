@@ -1,0 +1,84 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - ci-cd
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_servers:
+        description: '배포할 서버 목록 (공백으로 구분)'
+        required: false
+        type: string
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+      
+      - name: Build and push Docker image
+        working-directory: apps/backend
+        run: |
+          docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    env:
+      USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      MONGO: ${{ secrets.MONGO_URI }}
+      REDIS_H: ${{ secrets.REDIS_HOST }}
+      REDIS_P: ${{ secrets.REDIS_PORT }}
+      JWT: ${{ secrets.JWT_SECRET }}
+      ENC_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      ENC_SALT: ${{ secrets.ENCRYPTION_SALT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Get Backend Server IPs and Deploy
+        run: |
+          # Get server IPs
+          if [ -n "${{ inputs.deploy_servers }}" ]; then
+            SERVERS="${{ inputs.deploy_servers }}"
+          else
+            SERVERS=$(aws ec2 describe-instances \
+              --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --output text | tr '\t' ' ')
+          fi
+          
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          
+          # Setup known hosts and deploy
+          for server in $SERVERS; do
+            [ -n "$server" ] || continue
+            ssh-keyscan -H "$server" >> ~/.ssh/known_hosts 2>/dev/null || true
+            echo "Deploying to $server..."
+            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && export DOCKER_USERNAME=$USERNAME && export MONGO_URI=$MONGO && export REDIS_HOST=$REDIS_H && export REDIS_PORT=$REDIS_P && export JWT_SECRET=$JWT && export ENCRYPTION_KEY=$ENC_KEY && export ENCRYPTION_SALT=$ENC_SALT && sudo -E docker pull $USERNAME/ktb-chat-backend:latest && sudo -E docker compose up -d --force-recreate"
+          done
