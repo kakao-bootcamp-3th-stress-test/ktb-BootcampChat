@@ -123,10 +123,27 @@ public class UserController {
     @PostMapping("/profile-image")
     public ResponseEntity<?> uploadProfileImage(
             Principal principal,
-            @RequestParam("profileImage") MultipartFile file) {
+            @RequestParam(value = "profileImage", required = false) MultipartFile file,
+            @RequestParam(value = "s3Key", required = false) String s3Key,
+            @RequestParam(value = "s3Url", required = false) String s3Url) {
 
         try {
-            ProfileImageResponse response = userService.uploadProfileImage(principal.getName(), file);
+            ProfileImageResponse response;
+            
+            // 프론트엔드에서 이미 S3에 업로드한 경우 메타데이터만 저장 (파일 없이)
+            if (s3Key != null && !s3Key.isEmpty() && s3Url != null && !s3Url.isEmpty()) {
+                log.info("프론트엔드에서 직접 업로드된 프로필 이미지 메타데이터 저장 - s3Key: {}", s3Key);
+                // 프론트엔드에서 이미 검증 완료했으므로 파일 없이 메타데이터만 저장
+                response = userService.saveProfileImageMetadata(principal.getName(), s3Key, s3Url);
+            } else {
+                // 기존 로직: 백엔드에서 파일 업로드 (하위 호환성)
+                if (file == null || file.isEmpty()) {
+                    return ResponseEntity.badRequest().body(StandardResponse.error("파일이 제공되지 않았습니다."));
+                }
+                log.info("백엔드에서 프로필 이미지 업로드 처리");
+                response = userService.uploadProfileImage(principal.getName(), file);
+            }
+            
             return ResponseEntity.ok(response);
         } catch (UsernameNotFoundException e) {
             log.error("프로필 이미지 업로드 실패 - 사용자 없음: {}", e.getMessage());

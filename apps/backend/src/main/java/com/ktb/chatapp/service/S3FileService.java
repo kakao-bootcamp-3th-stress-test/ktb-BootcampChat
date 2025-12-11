@@ -188,6 +188,69 @@ public class S3FileService implements FileService {
         deleteObject(key);
     }
 
+    @Override
+    public File saveFileMetadata(String filename, String originalFilename, String contentType, long fileSize, String s3Key, String uploaderId) {
+        File savedFile = fileRepository.save(File.builder()
+                .filename(filename)
+                .originalname(FileUtil.normalizeOriginalFilename(originalFilename))
+                .mimetype(contentType)
+                .size(fileSize)
+                .path(s3Key)
+                .user(uploaderId)
+                .uploadDate(LocalDateTime.now())
+                .build());
+        log.info("File metadata saved - ID: {}, S3Key: {}", savedFile.getId(), s3Key);
+        return savedFile;
+    }
+
+    @Override
+    public FileUploadResult saveFileMetadataFromS3(String filename, String originalFilename, String contentType, long fileSize, String s3Key, String uploaderId) {
+        try {
+            // 파일명이 없으면 S3 키에서 추출
+            if (filename == null || filename.isEmpty()) {
+                filename = extractFilenameFromS3Key(s3Key);
+            }
+            
+            // 원본 파일명이 없으면 파일명 사용
+            if (originalFilename == null || originalFilename.isEmpty()) {
+                originalFilename = filename;
+            }
+
+            File savedFile = saveFileMetadata(filename, originalFilename, contentType, fileSize, s3Key, uploaderId);
+
+            return FileUploadResult.builder()
+                    .success(true)
+                    .file(savedFile)
+                    .build();
+        } catch (Exception e) {
+            log.error("S3 file metadata save failed - s3Key: {}, Error: {}", s3Key, e.getMessage(), e);
+            throw new RuntimeException("파일 메타데이터 저장에 실패했습니다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * S3 키에서 파일명 추출
+     */
+    private String extractFilenameFromS3Key(String s3Key) {
+        if (s3Key == null || s3Key.isEmpty()) {
+            return "file";
+        }
+        int lastSlash = s3Key.lastIndexOf('/');
+        return lastSlash >= 0 && lastSlash < s3Key.length() - 1 
+            ? s3Key.substring(lastSlash + 1) 
+            : s3Key;
+    }
+
+    @Override
+    public String getFilePublicUrl(String filename) {
+        File fileEntity = fileRepository.findByFilename(filename)
+                .orElse(null);
+        if (fileEntity == null) {
+            return null;
+        }
+        return buildPublicUrl(fileEntity.getPath());
+    }
+
     private void uploadToS3(MultipartFile file, String key, boolean publicRead) throws IOException {
         try {
             PutObjectRequest.Builder requestBuilder = PutObjectRequest.builder()

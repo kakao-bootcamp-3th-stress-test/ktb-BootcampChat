@@ -1,6 +1,7 @@
 import axios, { isCancel, CancelToken } from "axios";
 import axiosInstance from "./axios";
 import { Toast } from "../components/Toast";
+import { uploadToS3 } from "../utils/s3UploadUtils";
 
 class FileService {
   constructor() {
@@ -75,38 +76,47 @@ class FileService {
   }
 
   async uploadFile(file, onProgress, token, sessionId) {
+    // validateFile은 내부적으로 s3UploadUtils의 validateFile을 사용하므로
+    // uploadToS3에서도 동일한 검증이 수행됨 (중복이지만 안전을 위해 유지)
     const validationResult = await this.validateFile(file);
     if (!validationResult.success) {
       return validationResult;
     }
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      // 1. 프론트엔드에서 검증 후 직접 S3에 업로드 (검증은 uploadToS3 내부에서도 수행)
+      const s3Result = await uploadToS3(file, 'files', onProgress);
 
-      const source = CancelToken.source();
-      this.activeUploads.set(file.name, source);
+      if (!s3Result.success) {
+        return {
+          success: false,
+          message: s3Result.error || "S3 업로드에 실패했습니다."
+        };
+      }
 
+      // 2. 백엔드에 메타데이터만 저장 (파일 없이 - 속도 최적화)
       const uploadUrl = this.baseUrl
         ? `${this.baseUrl}/api/files/upload`
         : "/api/files/upload";
 
-      // token과 sessionId는 axios 인터셉터에서 자동으로 추가되므로
-      // 여기서는 명시적으로 전달하지 않아도 됩니다
+      // FormData에 메타데이터만 포함 (파일 없이 - 최소한의 필수 정보만)
+      const formData = new FormData();
+      formData.append("s3Key", s3Result.s3Key);
+      formData.append("s3Url", s3Result.url);
+      formData.append("filename", s3Result.filename);
+      formData.append("originalFilename", s3Result.originalFilename);
+      formData.append("contentType", file.type);
+      formData.append("fileSize", file.size.toString());
+
+      const source = CancelToken.source();
+      this.activeUploads.set(file.name, source);
+
       const response = await axiosInstance.post(uploadUrl, formData, {
         headers: {
           "Content-Type": "multipart/form-data"
         },
         cancelToken: source.token,
-        withCredentials: true,
-        onUploadProgress: (progressEvent) => {
-          if (onProgress) {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            onProgress(percentCompleted);
-          }
-        }
+        withCredentials: true
       });
 
       this.activeUploads.delete(file.name);
@@ -114,7 +124,7 @@ class FileService {
       if (!response.data || !response.data.success) {
         return {
           success: false,
-          message: response.data?.message || "파일 업로드에 실패했습니다."
+          message: response.data?.message || "파일 메타데이터 저장에 실패했습니다."
         };
       }
 
@@ -125,7 +135,7 @@ class FileService {
           ...response.data,
           file: {
             ...fileData,
-            url: this.getFileUrl(fileData.filename, true)
+            url: s3Result.url || this.getFileUrl(fileData.filename, true)
           }
         }
       };

@@ -4,6 +4,7 @@ import { Button, Text, Callout, IconButton, VStack, HStack } from "@vapor-ui/cor
 import { useAuth } from "@/contexts/AuthContext";
 import CustomAvatar from "@/components/CustomAvatar";
 import { Toast } from "@/components/Toast";
+import { uploadToS3 } from "@/utils/s3UploadUtils";
 
 const ProfileImageUpload = ({ currentImage, onImageChange }) => {
   const { user } = useAuth();
@@ -31,16 +32,6 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
     if (!file) return;
 
     try {
-      // 이미지 파일 검증
-      if (!file.type.startsWith("image/")) {
-        throw new Error("이미지 파일만 업로드할 수 있습니다.");
-      }
-
-      // 파일 크기 제한 (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        throw new Error("파일 크기는 5MB를 초과할 수 없습니다.");
-      }
-
       setUploading(true);
       setError("");
 
@@ -53,11 +44,20 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
         throw new Error("인증 정보가 없습니다.");
       }
 
-      // FormData 생성
-      const formData = new FormData();
-      formData.append("profileImage", file);
+      // 1. 프론트엔드에서 검증 후 직접 S3에 업로드 (검증은 uploadToS3 내부에서 수행)
+      const s3Result = await uploadToS3(file, 'profiles', (progress) => {
+        // 업로드 진행률 표시 가능
+      });
 
-      // 파일 업로드 요청
+      if (!s3Result.success) {
+        throw new Error(s3Result.error || "이미지 업로드에 실패했습니다.");
+      }
+
+      // 2. 백엔드에 메타데이터만 저장 (파일 없이 - 속도 최적화)
+      const formData = new FormData();
+      formData.append("s3Key", s3Result.s3Key);
+      formData.append("s3Url", s3Result.url);
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/users/profile-image`,
         {
@@ -72,7 +72,7 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "이미지 업로드에 실패했습니다.");
+        throw new Error(errorData.message || "이미지 메타데이터 저장에 실패했습니다.");
       }
 
       const data = await response.json();
@@ -80,12 +80,12 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
       // 로컬 스토리지의 사용자 정보 업데이트
       const updatedUser = {
         ...user,
-        profileImage: data.imageUrl
+        profileImage: data.imageUrl || s3Result.url
       };
       localStorage.setItem("user", JSON.stringify(updatedUser));
 
       // 부모 컴포넌트에 변경 알림
-      onImageChange(data.imageUrl);
+      onImageChange(data.imageUrl || s3Result.url);
 
       Toast.success("프로필 이미지가 변경되었습니다.");
 
