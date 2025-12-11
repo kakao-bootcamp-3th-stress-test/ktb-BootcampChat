@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -37,6 +38,7 @@ public class ConnectionLoginHandler {
     private final RoomJoinHandler roomJoinHandler;
     private final RoomLeaveHandler roomLeaveHandler;
     private final SocketConnectionTracker connectionTracker;
+    private final ScheduledExecutorService socketIoScheduler;
 
     public ConnectionLoginHandler(
             SocketIOServer socketIOServer,
@@ -45,13 +47,15 @@ public class ConnectionLoginHandler {
             RoomJoinHandler roomJoinHandler,
             RoomLeaveHandler roomLeaveHandler,
             SocketConnectionTracker connectionTracker,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            ScheduledExecutorService socketIoScheduler) {
         this.socketIOServer = socketIOServer;
         this.connectedUsers = connectedUsers;
         this.userRooms = userRooms;
         this.roomJoinHandler = roomJoinHandler;
         this.roomLeaveHandler = roomLeaveHandler;
         this.connectionTracker = connectionTracker;
+        this.socketIoScheduler = socketIoScheduler;
 
         // Register gauge metric for concurrent users
         Gauge.builder("socketio.concurrent.users", connectedUsers::size)
@@ -170,9 +174,9 @@ public class ConnectionLoginHandler {
         CompletableFuture.runAsync(() -> existingClient.sendEvent(SESSION_ENDED, Map.of(
                 "reason", "duplicate_login",
                 "message", "다른 기기에서 로그인하여 현재 세션이 종료되었습니다."
-        )), CompletableFuture.delayedExecutor(10, TimeUnit.SECONDS));
+        )), CompletableFuture.delayedExecutor(10, TimeUnit.SECONDS, socketIoScheduler));
 
         CompletableFuture.runAsync(existingClient::disconnect,
-                CompletableFuture.delayedExecutor(11, TimeUnit.SECONDS));
+                CompletableFuture.delayedExecutor(11, TimeUnit.SECONDS, socketIoScheduler));
     }
 }

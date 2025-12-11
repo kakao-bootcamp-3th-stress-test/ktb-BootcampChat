@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -289,15 +290,11 @@ public class RoomController {
             throw new RuntimeException("Creator not found for room " + room.getId());
         }
         UserResponse creatorSummary = UserResponse.from(creator);
-        List<UserResponse> participantSummaries = room.getParticipantIds()
+        List<String> participantIds = room.getParticipantIds() != null
+            ? new ArrayList<>(room.getParticipantIds())
+            : List.of();
+        List<UserResponse> participantSummaries = userRepository.findAllById(participantIds)
                 .stream()
-                .map(userRepository::findById).peek(optUser -> {
-                    if (optUser.isEmpty()) {
-                        log.warn("Participant not found: roomId={}, userId={}", room.getId(), optUser);
-                    }
-                })
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(UserResponse::from)
                 .toList();
 

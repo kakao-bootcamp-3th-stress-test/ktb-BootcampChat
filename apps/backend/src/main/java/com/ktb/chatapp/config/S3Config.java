@@ -32,7 +32,7 @@ public class S3Config {
     @Value("${app.file.s3.path-style:false}")
     private boolean pathStyleAccess;
 
-    @Bean
+    @Bean(destroyMethod = "close")
     public S3Client s3Client() {
         if (!StringUtils.hasText(accessKey) || !StringUtils.hasText(secretKey)) {
             throw new IllegalStateException("S3 access-key and secret-key must be configured. Set FILE_S3_ACCESS_KEY and FILE_S3_SECRET_KEY environment variables.");

@@ -7,12 +7,17 @@ import com.corundumstudio.socketio.annotation.SpringAnnotationScanner;
 import com.corundumstudio.socketio.namespace.Namespace;
 import com.corundumstudio.socketio.protocol.JacksonJsonSupport;
 import com.corundumstudio.socketio.store.MemoryStoreFactory;
+import com.corundumstudio.socketio.store.RedissonStoreFactory;
+import com.corundumstudio.socketio.store.StoreFactory;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.ktb.chatapp.websocket.socketio.ChatDataStore;
 import com.ktb.chatapp.websocket.socketio.LocalChatDataStore;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,11 +31,26 @@ import static org.springframework.beans.factory.config.BeanDefinition.ROLE_INFRA
 @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
 public class SocketIOConfig {
 
+    private final ObjectProvider<RedissonClient> redissonClientProvider;
+
     @Value("${socketio.server.host:localhost}")
     private String host;
 
     @Value("${socketio.server.port:5002}")
     private Integer port;
+
+    @Value("${socketio.server.boss-threads:2}")
+    private Integer bossThreads;
+
+    @Value("${socketio.server.worker-threads:24}")
+    private Integer workerThreads;
+
+    @Value("${socketio.store:redis}")
+    private String storeType;
+
+    public SocketIOConfig(ObjectProvider<RedissonClient> redissonClientProvider) {
+        this.redissonClientProvider = redissonClientProvider;
+    }
 
     @Bean(initMethod = "start", destroyMethod = "stop")
     public SocketIOServer socketIOServer(AuthTokenListener authTokenListener) {
@@ -40,11 +60,13 @@ public class SocketIOConfig {
         
         var socketConfig = new SocketConfig();
         socketConfig.setReuseAddress(true);
-        socketConfig.setTcpNoDelay(false);
-        socketConfig.setAcceptBackLog(100);
-        socketConfig.setTcpSendBufferSize(4096);
-        socketConfig.setTcpReceiveBufferSize(4096);
+        socketConfig.setTcpNoDelay(true); // 작은 패킷도 즉시 전송해 채팅 지연 감소
+        socketConfig.setAcceptBackLog(200);
+        socketConfig.setTcpSendBufferSize(65536);
+        socketConfig.setTcpReceiveBufferSize(65536);
         config.setSocketConfig(socketConfig);
+        config.setBossThreads(bossThreads);
+        config.setWorkerThreads(workerThreads);
 
         config.setOrigin("*");
 
@@ -54,7 +76,7 @@ public class SocketIOConfig {
         config.setUpgradeTimeout(10000);
 
         config.setJsonSupport(new JacksonJsonSupport(new JavaTimeModule()));
-        config.setStoreFactory(new MemoryStoreFactory()); // 단일노드 전용
+        config.setStoreFactory(resolveStoreFactory());
 
         log.info("Socket.IO server configured on {}:{} with {} boss threads and {} worker threads",
                  host, port, config.getBossThreads(), config.getWorkerThreads());
@@ -75,11 +97,24 @@ public class SocketIOConfig {
     public BeanPostProcessor springAnnotationScanner(@Lazy SocketIOServer socketIOServer) {
         return new SpringAnnotationScanner(socketIOServer);
     }
-    
-    // 인메모리 저장소, 단일 노드 환경에서만 사용
+
     @Bean
-    @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(ChatDataStore.class)
     public ChatDataStore chatDataStore() {
         return new LocalChatDataStore();
+    }
+
+    private StoreFactory resolveStoreFactory() {
+        if ("local".equalsIgnoreCase(storeType)) {
+            log.info("Socket.IO store factory set to in-memory (local) mode");
+            return new MemoryStoreFactory();
+        }
+
+        var redissonClient = redissonClientProvider.getIfAvailable();
+        if (redissonClient == null) {
+            throw new IllegalStateException("socketio.store=redis requires a RedissonClient bean");
+        }
+        log.info("Socket.IO store factory configured to use Redis-backed adapter");
+        return new RedissonStoreFactory(redissonClient);
     }
 }

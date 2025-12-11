@@ -3,11 +3,17 @@ package com.ktb.chatapp.websocket.socketio.handler;
 import com.ktb.chatapp.dto.message.FetchMessagesRequest;
 import com.ktb.chatapp.dto.message.FetchMessagesResponse;
 import com.ktb.chatapp.dto.message.MessageResponse;
+import com.ktb.chatapp.model.File;
 import com.ktb.chatapp.model.Message;
+import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,6 +30,7 @@ import static java.util.Collections.emptyList;
 public class MessageLoader {
 
     private final MessageRepository messageRepository;
+    private final FileRepository fileRepository;
     private final MessageResponseMapper messageResponseMapper;
     private final MessageReadStatusService messageReadStatusService;
 
@@ -63,8 +70,10 @@ public class MessageLoader {
         messageReadStatusService.updateReadStatus(messageIds, userId);
         
         // 메시지 응답 생성
+        Map<String, File> fileCache = preloadFiles(sortedMessages);
+
         List<MessageResponse> messageResponses = sortedMessages.stream()
-                .map(messageResponseMapper::mapToMessageResponse)
+                .map(message -> messageResponseMapper.mapToMessageResponse(message, fileCache))
                 .toList();
 
         boolean hasMore = messagePage.hasNext();
@@ -76,6 +85,18 @@ public class MessageLoader {
                 .messages(messageResponses)
                 .hasMore(hasMore)
                 .build();
+    }
+
+    private Map<String, File> preloadFiles(List<Message> messages) {
+        Set<String> fileIds = messages.stream()
+                .map(Message::getFileId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (fileIds.isEmpty()) {
+            return Map.of();
+        }
+        return fileRepository.findAllById(List.copyOf(fileIds)).stream()
+                .collect(Collectors.toMap(File::getId, file -> file));
     }
 
 }
