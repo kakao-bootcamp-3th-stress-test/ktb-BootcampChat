@@ -193,13 +193,22 @@ public class FileController {
             HttpServletRequest request,
             Principal principal) {
         try {
+            if (principal == null) {
+                log.warn("파일 미리보기 인증 실패: {} (Principal이 null)", filename);
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("message", "인증이 필요합니다.");
+                return ResponseEntity.status(401).body(errorResponse);
+            }
+
             User user = userRepository.findByEmail(principal.getName())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
 
-            Resource resource = fileService.loadFileAsResource(filename, user.getId());
-
             File fileEntity = fileRepository.findByFilename(filename)
-                    .orElseThrow(() -> new RuntimeException("파일을 찾을 수 없습니다."));
+                    .orElseThrow(() -> {
+                        log.warn("파일 엔티티를 찾을 수 없음: {} (사용자: {})", filename, user.getId());
+                        return new RuntimeException("파일을 찾을 수 없습니다.");
+                    });
 
             if (!fileEntity.isPreviewable()) {
                 Map<String, Object> errorResponse = new HashMap<>();
@@ -208,6 +217,7 @@ public class FileController {
                 return ResponseEntity.status(415).body(errorResponse);
             }
 
+            Resource resource = fileService.loadFileAsResource(filename, user.getId());
 
             String originalFilename = fileEntity.getOriginalname();
             String encodedFilename = URLEncoder.encode(originalFilename, StandardCharsets.UTF_8)
@@ -226,10 +236,11 @@ public class FileController {
                     .contentLength(contentLength)
                     .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
                     .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
                     .body(resource);
 
         } catch (Exception e) {
-            log.error("파일 미리보기 중 에러 발생: {}", filename, e);
+            log.error("파일 미리보기 중 에러 발생: {} - {}", filename, e.getMessage(), e);
             return handleFileError(e);
         }
     }
