@@ -22,6 +22,9 @@ services:
       - "9216:9216"
     command:
       - '--mongodb.uri=mongodb://mongo:27017'
+      - '--collector.collstats'
+      - '--collector.indexstats'
+      - '--discovering-mode'
     depends_on:
       - mongo
     networks:
