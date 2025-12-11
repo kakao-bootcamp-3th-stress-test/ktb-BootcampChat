@@ -3,9 +3,11 @@ package com.ktb.chatapp.websocket.socketio.handler;
 import com.ktb.chatapp.dto.FileResponse;
 import com.ktb.chatapp.dto.message.MessageResponse;
 import com.ktb.chatapp.model.Message;
+import com.ktb.chatapp.model.File;
 import com.ktb.chatapp.repository.FileRepository;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,10 @@ public class MessageResponseMapper {
      * @return MessageResponse DTO
      */
     public MessageResponse mapToMessageResponse(Message message) {
+        return mapToMessageResponse(message, null);
+    }
+
+    public MessageResponse mapToMessageResponse(Message message, Map<String, File> preloadedFiles) {
         MessageResponse.MessageResponseBuilder builder = MessageResponse.builder()
                 .id(message.getId())
                 .content(message.getContent())
@@ -41,17 +47,7 @@ public class MessageResponseMapper {
                 .readers(message.getReaders() != null ?
                         message.getReaders() : new ArrayList<>());
 
-        // 파일 정보 설정
-        Optional.ofNullable(message.getFileId())
-                .flatMap(fileRepository::findById)
-                .map(file -> FileResponse.builder()
-                        .id(file.getId())
-                        .filename(file.getFilename())
-                        .originalname(file.getOriginalname())
-                        .mimetype(file.getMimetype())
-                        .size(file.getSize())
-                        .build())
-                .ifPresent(builder::file);
+        attachFileMetadata(message, builder, preloadedFiles);
 
         // 메타데이터 설정
         if (message.getMetadata() != null) {
@@ -59,5 +55,37 @@ public class MessageResponseMapper {
         }
 
         return builder.build();
+    }
+
+    private void attachFileMetadata(Message message,
+                                    MessageResponse.MessageResponseBuilder builder,
+                                    Map<String, File> preloadedFiles) {
+        String fileId = message.getFileId();
+        if (fileId == null) {
+            return;
+        }
+
+        File file = null;
+        if (preloadedFiles != null) {
+            file = preloadedFiles.get(fileId);
+        }
+        if (file == null) {
+            file = fileRepository.findById(fileId).orElse(null);
+        }
+        if (file == null) {
+            return;
+        }
+
+        builder.file(mapToFileResponse(file));
+    }
+
+    private FileResponse mapToFileResponse(File file) {
+        return FileResponse.builder()
+                .id(file.getId())
+                .filename(file.getFilename())
+                .originalname(file.getOriginalname())
+                .mimetype(file.getMimetype())
+                .size(file.getSize())
+                .build();
     }
 }
