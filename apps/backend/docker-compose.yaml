@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     image: ${DOCKER_USERNAME}/ktb-chat-backend:latest
