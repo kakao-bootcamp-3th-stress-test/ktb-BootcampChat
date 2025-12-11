@@ -4,10 +4,10 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnEvent;
 import com.ktb.chatapp.dto.message.FetchMessagesRequest;
 import com.ktb.chatapp.dto.message.FetchMessagesResponse;
-import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
+import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +29,7 @@ public class MessageFetchHandler {
     private final RoomRepository roomRepository;
     private final MessageLoader messageLoader;
     private final SocketConnectionTracker connectionTracker;
+    private final UserRooms userRooms;
 
     @OnEvent(FETCH_PREVIOUS_MESSAGES)
     public void handleFetchMessages(SocketIOClient client, FetchMessagesRequest data) {
@@ -45,8 +46,7 @@ public class MessageFetchHandler {
         
         try {
             // 권한 체크
-            Room room = roomRepository.findById(data.roomId()).orElse(null);
-            if (room == null || !room.getParticipantIds().contains(userId)) {
+            if (!hasRoomAccess(userId, data.roomId())) {
                 client.sendEvent(ERROR, Map.of(
                         "code", "LOAD_ERROR",
                         "message", "채팅방 접근 권한이 없습니다."
@@ -81,5 +81,16 @@ public class MessageFetchHandler {
     private String getUserId(SocketIOClient client) {
         var user = (SocketUser) client.get("user");
         return user != null ? user.id() : null;
+    }
+
+    private boolean hasRoomAccess(String userId, String roomId) {
+        if (userRooms.isInRoom(userId, roomId)) {
+            return true;
+        }
+        boolean exists = roomRepository.existsByIdAndParticipantIdsContaining(roomId, userId);
+        if (exists) {
+            userRooms.add(userId, roomId);
+        }
+        return exists;
     }
 }

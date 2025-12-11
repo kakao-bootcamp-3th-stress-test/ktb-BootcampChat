@@ -5,6 +5,7 @@ import com.ktb.chatapp.dto.rooms.CreateRoomRequest;
 import com.ktb.chatapp.dto.rooms.HealthResponse;
 import com.ktb.chatapp.dto.rooms.RoomResponse;
 import com.ktb.chatapp.dto.rooms.RoomsResponse;
+import com.ktb.chatapp.dto.rooms.RoomSummary;
 import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.event.RoomCreatedEvent;
 import com.ktb.chatapp.event.RoomUpdatedEvent;
@@ -13,23 +14,31 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.cache.RoomListCache;
+import com.ktb.chatapp.service.cache.RoomListCache.CachedRoomsPage;
+import com.ktb.chatapp.service.cache.RoomListCache.RoomListCacheKey;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.AddFieldsOperation;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.mongodb.core.aggregation.MatchOperation;
+import org.springframework.data.mongodb.core.aggregation.ProjectionOperation;
+import org.springframework.data.mongodb.core.aggregation.SortOperation;
+import org.springframework.data.mongodb.core.aggregation.ArrayOperators;
+import org.springframework.data.mongodb.core.aggregation.ConditionalOperators;
+import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 @Service
@@ -41,6 +50,8 @@ public class RoomService {
     private final MessageRepository messageRepository;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+    private final MongoTemplate mongoTemplate;
+    private final RoomListCache roomListCache;
 
     public RoomsResponse getAllRoomsWithPagination(
             com.ktb.chatapp.dto.PageRequest pageRequest, String name) {
@@ -59,10 +70,19 @@ public class RoomService {
                 ? Sort.Direction.DESC
                 : Sort.Direction.ASC;
 
-            // 정렬 필드 매핑 (participantsCount는 특별 처리 필요)
             String sortField = pageRequest.getSortField();
-            if ("participantsCount".equals(sortField)) {
-                sortField = "participantIds"; // MongoDB 필드명으로 변경
+
+            RoomListCacheKey cacheKey = new RoomListCacheKey(
+                pageRequest.getPage(),
+                pageRequest.getPageSize(),
+                pageRequest.getSortField(),
+                pageRequest.getSortOrder(),
+                pageRequest.getSearch()
+            ).normalize();
+
+            CachedRoomsPage cached = roomListCache.get(cacheKey);
+            if (cached != null) {
+                return buildResponseFromCache(cached, name);
             }
 
             // Pageable 객체 생성
@@ -72,41 +92,43 @@ public class RoomService {
                 Sort.by(direction, sortField)
             );
 
-            // 검색어가 있는 경우와 없는 경우 분리
-            Page<Room> roomPage;
-            if (pageRequest.getSearch() != null && !pageRequest.getSearch().trim().isEmpty()) {
-                roomPage = roomRepository.findByNameContainingIgnoreCase(
-                    pageRequest.getSearch().trim(), springPageRequest);
-            } else {
-                roomPage = roomRepository.findAll(springPageRequest);
-            }
+            List<RoomSummary> roomSummaries = loadRoomSummaries(
+                pageRequest.getSearch(),
+                springPageRequest.getPageNumber(),
+                springPageRequest.getPageSize(),
+                direction,
+                sortField
+            );
 
-            // Room을 RoomResponse로 변환
-            List<Room> rooms = roomPage.getContent();
-            Map<String, User> usersById = loadUsersForRooms(rooms, false);
-            Map<String, Long> recentCounts = loadRecentMessageCounts(rooms);
+            long total = computeTotalCount(pageRequest.getSearch());
 
-            List<RoomResponse> roomResponses = rooms.stream()
-                .map(room -> mapToRoomResponse(room, name, usersById, recentCounts, false))
-                .collect(Collectors.toList());
+            Map<String, User> usersById = loadUsersForRoomSummaries(roomSummaries);
+            Map<String, Long> recentCounts = loadRecentMessageCountsByIds(
+                roomSummaries.stream().map(RoomSummary::id).toList());
+
+            List<RoomResponse> baseRoomResponses = roomSummaries.stream()
+                .map(summary -> mapToRoomResponse(summary, null, usersById, recentCounts))
+                .toList();
 
             // 메타데이터 생성
             PageMetadata metadata = PageMetadata.builder()
-                .total(roomPage.getTotalElements())
+                .total(total)
                 .page(pageRequest.getPage())
                 .pageSize(pageRequest.getPageSize())
-                .totalPages(roomPage.getTotalPages())
-                .hasMore(roomPage.hasNext())
-                .currentCount(roomResponses.size())
+                .totalPages(calculateTotalPages(total, pageRequest.getPageSize()))
+                .hasMore(hasMorePages(total, pageRequest.getPage(), pageRequest.getPageSize()))
+                .currentCount(baseRoomResponses.size())
                 .sort(PageMetadata.SortInfo.builder()
                     .field(pageRequest.getSortField())
                     .order(pageRequest.getSortOrder())
                     .build())
                 .build();
 
+            roomListCache.put(cacheKey, baseRoomResponses, metadata);
+
             return RoomsResponse.builder()
                 .success(true)
-                .data(roomResponses)
+                .data(applyRequesterIdentity(baseRoomResponses, name))
                 .metadata(metadata)
                 .build();
 
@@ -183,14 +205,15 @@ public class RoomService {
         
         // Publish event for room created
         try {
-            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom), true);
+            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom), false);
             Map<String, Long> recentCounts = loadRecentMessageCounts(List.of(savedRoom));
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts, true);
+            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts, false);
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
         }
         
+        roomListCache.invalidateAll();
         return savedRoom;
     }
 
@@ -232,7 +255,66 @@ public class RoomService {
             log.error("roomUpdate 이벤트 발행 실패", e);
         }
 
+        roomListCache.invalidateAll();
         return room;
+    }
+
+    private List<RoomSummary> loadRoomSummaries(
+            String search,
+            int page,
+            int size,
+            Sort.Direction direction,
+            String sortField) {
+        List<AggregationOperation> operations = new ArrayList<>();
+        if (StringUtils.hasText(search)) {
+            MatchOperation match = Aggregation.match(
+                Criteria.where("name").regex(search.trim(), "i"));
+            operations.add(match);
+        }
+
+        AddFieldsOperation participantsCountField = Aggregation.addFields()
+            .addField("participantsCount")
+            .withValue(
+                ArrayOperators.Size.lengthOfArray(
+                    ConditionalOperators.ifNull("participantIds").then(Collections.emptyList())
+                )
+            )
+            .build();
+        operations.add(participantsCountField);
+
+        SortOperation sortStage = Aggregation.sort(Sort.by(direction, resolveRoomSortField(sortField)));
+        operations.add(sortStage);
+
+        long skipValue = Math.max(page, 0) * (long) Math.max(size, 0);
+        operations.add(Aggregation.skip(skipValue));
+        operations.add(Aggregation.limit(Math.max(size, 0)));
+
+        ProjectionOperation projection = Aggregation.project("name", "creator", "hasPassword", "createdAt")
+            .and("_id").as("id")
+            .and("participantsCount").as("participantsCount");
+        operations.add(projection);
+
+        Aggregation aggregation = Aggregation.newAggregation(operations);
+        AggregationResults<RoomSummary> results =
+            mongoTemplate.aggregate(aggregation, "rooms", RoomSummary.class);
+        return results.getMappedResults();
+    }
+
+    private long computeTotalCount(String search) {
+        if (StringUtils.hasText(search)) {
+            return roomRepository.countByNameContainingIgnoreCase(search.trim());
+        }
+        return roomRepository.count();
+    }
+
+    private String resolveRoomSortField(String field) {
+        if ("participantsCount".equals(field)) {
+            return "participantsCount";
+        }
+        if ("name".equals(field) || "hasPassword".equals(field) || "createdAt".equals(field)) {
+            return field;
+        }
+        return "createdAt";
     }
 
     private RoomResponse mapToRoomResponse(
@@ -281,6 +363,35 @@ public class RoomService {
             .build();
     }
 
+    private RoomResponse mapToRoomResponse(
+            RoomSummary summary,
+            String requesterIdentity,
+            Map<String, User> usersById,
+            Map<String, Long> recentCounts) {
+        if (summary == null) {
+            return null;
+        }
+
+        User creator = summary.creator() != null ? usersById.get(summary.creator()) : null;
+
+        return RoomResponse.builder()
+            .id(summary.id())
+            .name(summary.name() != null ? summary.name() : "제목 없음")
+            .hasPassword(summary.hasPassword())
+            .creator(creator != null ? UserResponse.builder()
+                .id(creator.getId())
+                .name(creator.getName() != null ? creator.getName() : "알 수 없음")
+                .email(creator.getEmail() != null ? creator.getEmail() : "")
+                .build() : null)
+            .participants(null)
+            .participantsCount((int) summary.participantsCount())
+            .createdAtDateTime(summary.createdAt())
+            .isCreator(creator != null && creator.getEmail() != null &&
+                creator.getEmail().equalsIgnoreCase(requesterIdentity))
+            .recentMessageCount(recentCounts.getOrDefault(summary.id(), 0L).intValue())
+            .build();
+    }
+
     private Map<String, User> loadUsersForRooms(List<Room> rooms, boolean includeParticipants) {
         if (rooms == null || rooms.isEmpty()) {
             return Collections.emptyMap();
@@ -305,6 +416,22 @@ public class RoomService {
         return result;
     }
 
+    private Map<String, User> loadUsersForRoomSummaries(List<RoomSummary> summaries) {
+        if (summaries == null || summaries.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<String> userIds = summaries.stream()
+            .map(RoomSummary::creator)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, User> result = new HashMap<>();
+        userRepository.findAllById(userIds).forEach(user -> result.put(user.getId(), user));
+        return result;
+    }
+
     private Map<String, Long> loadRecentMessageCounts(List<Room> rooms) {
         if (rooms == null || rooms.isEmpty()) {
             return Collections.emptyMap();
@@ -322,5 +449,59 @@ public class RoomService {
         Map<String, Long> result = new HashMap<>();
         counts.forEach(count -> result.put(count.getId(), count.getCount()));
         return result;
+    }
+
+    private Map<String, Long> loadRecentMessageCountsByIds(List<String> roomIds) {
+        if (roomIds == null || roomIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+        List<MessageRepository.RoomMessageCount> counts =
+            messageRepository.countRecentMessagesByRoomIds(roomIds, tenMinutesAgo);
+        Map<String, Long> result = new HashMap<>();
+        counts.forEach(count -> result.put(count.getId(), count.getCount()));
+        return result;
+    }
+
+    private int calculateTotalPages(long total, int pageSize) {
+        if (pageSize <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil((double) total / pageSize);
+    }
+
+    private boolean hasMorePages(long total, int page, int pageSize) {
+        if (pageSize <= 0) {
+            return false;
+        }
+        long shown = (long) (page + 1) * pageSize;
+        return shown < total;
+    }
+
+    private RoomsResponse buildResponseFromCache(CachedRoomsPage cached, String requesterIdentity) {
+        List<RoomResponse> responses = applyRequesterIdentity(cached.rooms(), requesterIdentity);
+        return RoomsResponse.builder()
+            .success(true)
+            .data(responses)
+            .metadata(cached.metadata())
+            .build();
+    }
+
+    private List<RoomResponse> applyRequesterIdentity(List<RoomResponse> baseResponses, String requesterIdentity) {
+        if (requesterIdentity == null || requesterIdentity.isBlank()) {
+            return baseResponses;
+        }
+        return baseResponses.stream()
+            .map(response -> response.toBuilder()
+                .isCreator(isCreatorForRequester(response, requesterIdentity))
+                .build())
+            .toList();
+    }
+
+    private boolean isCreatorForRequester(RoomResponse response, String requesterIdentity) {
+        if (response.getCreator() == null || response.getCreator().getEmail() == null) {
+            return false;
+        }
+        return response.getCreator().getEmail().equalsIgnoreCase(requesterIdentity);
     }
 }

@@ -16,7 +16,7 @@ import java.util.List;
 
 @Schema(description = "채팅방 응답 정보")
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class RoomResponse {
