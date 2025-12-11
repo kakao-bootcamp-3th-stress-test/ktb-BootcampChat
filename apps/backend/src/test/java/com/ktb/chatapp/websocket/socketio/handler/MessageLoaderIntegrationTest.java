@@ -63,7 +63,7 @@ class MessageLoaderIntegrationTest {
         // MessageLoader 인스턴스 생성
         messageLoader = new MessageLoader(
                 messageRepository,
-                userRepository,
+//                userRepository,
                 new MessageResponseMapper(fileRepository),
                 messageReadStatusService
         );
