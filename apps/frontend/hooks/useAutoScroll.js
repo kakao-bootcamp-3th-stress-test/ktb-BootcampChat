@@ -30,6 +30,9 @@ export const useAutoScroll = (
   const previousScrollTopRef = useRef(0);
   const isRestoringRef = useRef(false);
 
+  // 타이머 관리를 위한 ref
+  const scrollTimeoutRef = useRef(null);
+
   /**
    * 스크롤이 하단 근처에 있는지 확인
    */
@@ -50,6 +53,12 @@ export const useAutoScroll = (
     const container = containerRef.current;
     if (!container) return;
 
+    // 이전 타이머가 있으면 취소
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
+
     isAutoScrollingRef.current = true;
 
     container.scrollTo({
@@ -58,10 +67,15 @@ export const useAutoScroll = (
     });
 
     // 스크롤 완료 후 플래그 리셋
-    setTimeout(() => {
-      isAutoScrollingRef.current = false;
-      isNearBottomRef.current = true;
-    }, 300);
+    // smooth 스크롤은 보통 300-500ms 소요되므로 여유있게 500ms로 설정
+    scrollTimeoutRef.current = setTimeout(
+      () => {
+        isAutoScrollingRef.current = false;
+        isNearBottomRef.current = true;
+        scrollTimeoutRef.current = null;
+      },
+      behavior === "auto" ? 100 : 500
+    );
   }, []);
 
   /**
@@ -82,6 +96,12 @@ export const useAutoScroll = (
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
+
+      // 타이머 정리
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
     };
   }, [checkIsNearBottom]);
 
