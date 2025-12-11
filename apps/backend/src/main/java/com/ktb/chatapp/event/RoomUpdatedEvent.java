@@ -1,6 +1,6 @@
 package com.ktb.chatapp.event;
 
-import com.ktb.chatapp.dto.RoomResponse;
+import com.ktb.chatapp.dto.rooms.RoomResponse;
 import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 

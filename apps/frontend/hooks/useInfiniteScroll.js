@@ -1,8 +1,8 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback } from "react";
 
 /**
  * IntersectionObserver 기반 무한 스크롤 훅
- * 
+ *
  * @param {Function} onLoadMore - 더 로드할 때 호출할 함수
  * @param {boolean} hasMore - 더 불러올 데이터가 있는지 여부
  * @param {boolean} isLoading - 현재 로딩 중인지 여부
@@ -38,16 +38,13 @@ export const useInfiniteScroll = (
     // IntersectionObserver 옵션 설정
     const observerOptions = {
       root: options.root || null, // viewport 기준
-      rootMargin: options.rootMargin || '0px', // 200px 전에 미리 로드
+      rootMargin: options.rootMargin || "0px", // 200px 전에 미리 로드
       threshold: options.threshold || 0.1, // 10% 이상 보이면 트리거
       ...options
     };
 
     // Observer 생성
-    observerRef.current = new IntersectionObserver(
-      handleIntersect,
-      observerOptions
-    );
+    observerRef.current = new IntersectionObserver(handleIntersect, observerOptions);
 
     observerRef.current.observe(sentinel);
 

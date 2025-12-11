@@ -1,5 +1,6 @@
 package com.ktb.chatapp.dto;
 
+import com.ktb.chatapp.dto.message.MessageContent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "build:production": "npm run build && npm run deploy:static",
+    "clean": "rm -rf .next",
+    "build:production": "npm run clean && npm run build && npm run deploy:static",
     "deploy:static": "cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/"
   },
   "dependencies": {

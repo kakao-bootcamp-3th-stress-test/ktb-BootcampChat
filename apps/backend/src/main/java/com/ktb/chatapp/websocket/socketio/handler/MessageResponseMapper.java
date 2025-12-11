@@ -1,10 +1,8 @@
 package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.ktb.chatapp.dto.FileResponse;
-import com.ktb.chatapp.dto.MessageResponse;
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.message.MessageResponse;
 import com.ktb.chatapp.model.Message;
-import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.FileRepository;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,30 +26,20 @@ public class MessageResponseMapper {
      * Message 엔티티를 MessageResponse DTO로 변환
      *
      * @param message 변환할 메시지 엔티티
-     * @param sender 메시지 발신자 정보 (null 가능)
      * @return MessageResponse DTO
      */
-    public MessageResponse mapToMessageResponse(Message message, User sender) {
+    public MessageResponse mapToMessageResponse(Message message) {
         MessageResponse.MessageResponseBuilder builder = MessageResponse.builder()
                 .id(message.getId())
                 .content(message.getContent())
                 .type(message.getType())
                 .timestamp(message.toTimestampMillis())
                 .roomId(message.getRoomId())
+                .senderId(message.getSenderId())
                 .reactions(message.getReactions() != null ?
                         message.getReactions() : new HashMap<>())
                 .readers(message.getReaders() != null ?
                         message.getReaders() : new ArrayList<>());
-
-        // 발신자 정보 설정
-        if (sender != null) {
-            builder.sender(UserResponse.builder()
-                    .id(sender.getId())
-                    .name(sender.getName())
-                    .email(sender.getEmail())
-                    .profileImage(sender.getProfileImage())
-                    .build());
-        }
 
         // 파일 정보 설정
         Optional.ofNullable(message.getFileId())

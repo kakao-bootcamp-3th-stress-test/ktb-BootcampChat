@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -7,8 +7,8 @@ const api = axios.create({
   baseURL: API_URL,
   timeout: 30000,
   headers: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    "Content-Type": "application/json",
+    Accept: "application/json"
   },
   withCredentials: true
 });
@@ -20,27 +20,33 @@ const RETRY_CONFIG = {
   maxDelay: 5000,
   backoffFactor: 2,
   retryableStatuses: [408, 429, 500, 502, 503, 504],
-  retryableErrors: ['ECONNABORTED', 'ETIMEDOUT', 'ENOTFOUND', 'ENETUNREACH', 'ERR_NETWORK']
+  retryableErrors: [
+    "ECONNABORTED",
+    "ETIMEDOUT",
+    "ENOTFOUND",
+    "ENETUNREACH",
+    "ERR_NETWORK"
+  ]
 };
 
 // 유효성 검증 함수
 const validateCredentials = (credentials) => {
-  if (!credentials || typeof credentials !== 'object') {
-    throw new Error('인증 정보가 올바르지 않습니다.');
+  if (!credentials || typeof credentials !== "object") {
+    throw new Error("인증 정보가 올바르지 않습니다.");
   }
 
   const { email, password } = credentials;
 
   if (!email?.trim()) {
-    throw new Error('이메일을 입력해주세요.');
+    throw new Error("이메일을 입력해주세요.");
   }
 
   if (!password) {
-    throw new Error('비밀번호를 입력해주세요.');
+    throw new Error("비밀번호를 입력해주세요.");
   }
 
-  if (typeof email !== 'string' || typeof password !== 'string') {
-    throw new Error('입력값의 형식이 올바르지 않습니다.');
+  if (typeof email !== "string" || typeof password !== "string") {
+    throw new Error("입력값의 형식이 올바르지 않습니다.");
   }
 
   return {
@@ -51,7 +57,8 @@ const validateCredentials = (credentials) => {
 
 // 재시도 딜레이 계산
 const getRetryDelay = (retryCount) => {
-  const delay = RETRY_CONFIG.baseDelay * 
+  const delay =
+    RETRY_CONFIG.baseDelay *
     Math.pow(RETRY_CONFIG.backoffFactor, retryCount) *
     (1 + Math.random() * 0.1);
   return Math.min(delay, RETRY_CONFIG.maxDelay);
@@ -62,19 +69,21 @@ const isRetryableError = (error) => {
   if (error.code && RETRY_CONFIG.retryableErrors.includes(error.code)) {
     return true;
   }
-  return !error.response || RETRY_CONFIG.retryableStatuses.includes(error.response.status);
+  return (
+    !error.response || RETRY_CONFIG.retryableStatuses.includes(error.response.status)
+  );
 };
 
 // 요청 인터셉터
 api.interceptors.request.use(
-  config => {
+  (config) => {
     // 요청 데이터 검증
-    if (!config.data || typeof config.data !== 'object') {
+    if (!config.data || typeof config.data !== "object") {
       config.data = {};
     }
 
     // 설정된 데이터가 문자열이면 파싱 시도
-    if (typeof config.data === 'string') {
+    if (typeof config.data === "string") {
       try {
         config.data = JSON.parse(config.data);
       } catch (error) {
@@ -83,22 +92,21 @@ api.interceptors.request.use(
     }
 
     // 인증 토큰 설정
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
     if (user?.token) {
-      config.headers['x-auth-token'] = user.token;
+      config.headers["x-auth-token"] = user.token;
       if (user.sessionId) {
-        config.headers['x-session-id'] = user.sessionId;
+        config.headers["x-session-id"] = user.sessionId;
       }
     }
 
     return config;
   },
-  error => Promise.reject(error)
+  (error) => Promise.reject(error)
 );
 
 class AuthService {
-  constructor() {
-  }
+  constructor() {}
 
   /**
    * 로그인 API 호출
@@ -121,26 +129,25 @@ class AuthService {
         return userData;
       }
 
-      throw new Error(response.data?.message || '로그인에 실패했습니다.');
-
+      throw new Error(response.data?.message || "로그인에 실패했습니다.");
     } catch (error) {
       if (error.response?.status === 401) {
-        throw new Error('이메일 주소가 없거나 비밀번호가 틀렸습니다.');
+        throw new Error("이메일 주소가 없거나 비밀번호가 틀렸습니다.");
       }
 
       if (error.response?.status === 429) {
-        throw new Error('너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.');
+        throw new Error("너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.");
       }
 
       if (!error.response) {
-        throw new Error('서버와 통신할 수 없습니다. 잠시 후 다시 시도해주세요.');
+        throw new Error("서버와 통신할 수 없습니다. 잠시 후 다시 시도해주세요.");
       }
 
-      const errorMessage = error.response?.data?.message || '로그인 중 오류가 발생했습니다.';
+      const errorMessage =
+        error.response?.data?.message || "로그인 중 오류가 발생했습니다.";
       throw new Error(errorMessage);
     }
   }
-
 
   /**
    * 로그아웃 API 호출
@@ -149,10 +156,10 @@ class AuthService {
   async logout(token, sessionId) {
     try {
       if (token) {
-        await api.post('/api/auth/logout', null, {
+        await api.post("/api/auth/logout", null, {
           headers: {
-            'x-auth-token': token,
-            'x-session-id': sessionId
+            "x-auth-token": token,
+            "x-session-id": sessionId
           }
         });
       }
@@ -167,18 +174,18 @@ class AuthService {
    */
   async register(userData) {
     try {
-      const response = await api.post('/api/auth/register', userData);
+      const response = await api.post("/api/auth/register", userData);
 
       if (response.data?.success) {
         return response.data;
       }
 
-      throw new Error(response.data?.message || '회원가입에 실패했습니다.');
+      throw new Error(response.data?.message || "회원가입에 실패했습니다.");
     } catch (error) {
       throw this._handleError(error);
     }
   }
-  
+
   /**
    * 프로필 업데이트 API 호출
    * 상태 업데이트는 AuthContext에서 처리
@@ -186,30 +193,25 @@ class AuthService {
   async updateProfile(data, token, sessionId) {
     try {
       if (!token) {
-        throw new Error('인증 정보가 없습니다.');
+        throw new Error("인증 정보가 없습니다.");
       }
 
-      const response = await axios.put(
-        `${API_URL}/api/users/profile`,
-        data,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': token,
-            'x-session-id': sessionId
-          }
+      const response = await axios.put(`${API_URL}/api/users/profile`, data, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-auth-token": token,
+          "x-session-id": sessionId
         }
-      );
+      });
 
       if (response.data?.success) {
         return response.data.user;
       }
 
-      throw new Error(response.data?.message || '프로필 업데이트에 실패했습니다.');
-
+      throw new Error(response.data?.message || "프로필 업데이트에 실패했습니다.");
     } catch (error) {
       if (error.response?.status === 401) {
-        throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+        throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
       }
 
       throw this._handleError(error);
@@ -222,7 +224,7 @@ class AuthService {
   async changePassword(currentPassword, newPassword, token, sessionId) {
     try {
       if (!token) {
-        throw new Error('인증 정보가 없습니다.');
+        throw new Error("인증 정보가 없습니다.");
       }
 
       const response = await axios.put(
@@ -233,9 +235,9 @@ class AuthService {
         },
         {
           headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': token,
-            'x-session-id': sessionId
+            "Content-Type": "application/json",
+            "x-auth-token": token,
+            "x-session-id": sessionId
           }
         }
       );
@@ -244,19 +246,18 @@ class AuthService {
         return true;
       }
 
-      throw new Error(response.data?.message || '비밀번호 변경에 실패했습니다.');
-
+      throw new Error(response.data?.message || "비밀번호 변경에 실패했습니다.");
     } catch (error) {
       if (error.response?.status === 401) {
-        if (error.response.data?.message?.includes('비밀번호가 일치하지 않습니다')) {
-          throw new Error('현재 비밀번호가 일치하지 않습니다.');
+        if (error.response.data?.message?.includes("비밀번호가 일치하지 않습니다")) {
+          throw new Error("현재 비밀번호가 일치하지 않습니다.");
         }
-        throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+        throw new Error("인증이 만료되었습니다. 다시 로그인해주세요.");
       }
 
       throw this._handleError(error);
     }
-  }  
+  }
 
   /**
    * @deprecated getCurrentUser는 더 이상 사용하지 않습니다.
@@ -271,7 +272,7 @@ class AuthService {
    */
   getCurrentUser() {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = localStorage.getItem("user");
       if (!userStr) return null;
       return JSON.parse(userStr);
     } catch (error) {
@@ -284,7 +285,9 @@ class AuthService {
    * useAuth 훅의 verifyToken을 사용하세요.
    */
   async verifyToken() {
-    throw new Error('This method has been moved to AuthContext. Use useAuth().verifyToken() instead.');
+    throw new Error(
+      "This method has been moved to AuthContext. Use useAuth().verifyToken() instead."
+    );
   }
 
   /**
@@ -292,47 +295,49 @@ class AuthService {
    * useAuth 훅의 refreshToken을 사용하세요.
    */
   async refreshToken() {
-    throw new Error('This method has been moved to AuthContext. Use useAuth().refreshToken() instead.');
+    throw new Error(
+      "This method has been moved to AuthContext. Use useAuth().refreshToken() instead."
+    );
   }
 
   async checkServerConnection() {
     try {
       // 클라이언트에서만 실행되도록 확인
-      if (typeof window === 'undefined') {
+      if (typeof window === "undefined") {
         return false;
       }
 
       // API_URL이 없으면 연결 실패로 처리
       if (!API_URL) {
-        throw new Error('API URL이 설정되지 않았습니다.');
+        throw new Error("API URL이 설정되지 않았습니다.");
       }
 
-      const response = await api.get('/api/health', {
+      const response = await api.get("/api/health", {
         timeout: 3000, // 타임아웃을 3초로 단축
         validateStatus: (status) => status < 500 // 5xx 에러만 실제 에러로 처리
       });
 
-      return response.data?.status === 'ok' || response.status === 200;
+      return response.data?.status === "ok" || response.status === 200;
     } catch (error) {
       // 네트워크 에러나 타임아웃은 더 구체적인 메시지 제공
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        throw new Error('서버 응답 시간이 초과되었습니다.');
+      if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
+        throw new Error("서버 응답 시간이 초과되었습니다.");
       }
-      
-      if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
-        throw new Error('네트워크 연결을 확인해주세요.');
+
+      if (error.code === "ERR_NETWORK" || error.message.includes("Network Error")) {
+        throw new Error("네트워크 연결을 확인해주세요.");
       }
-      
+
       throw this._handleError(error);
     }
   }
 
   _handleError(error) {
     if (error.isNetworkError) return error;
-    
+
     if (axios.isAxiosError(error)) {
       if (!error.response) {
-        return new Error('서버와 통신할 수 없습니다. 네트워크 연결을 확인해주세요.');
+        return new Error("서버와 통신할 수 없습니다. 네트워크 연결을 확인해주세요.");
       }
 
       const { status, data } = error.response;
@@ -340,21 +345,25 @@ class AuthService {
 
       switch (status) {
         case 400:
-          return new Error(message || '입력 정보를 확인해주세요.');
+          return new Error(message || "입력 정보를 확인해주세요.");
         case 401:
-          return new Error(message || '인증에 실패했습니다.');
+          return new Error(message || "인증에 실패했습니다.");
         case 403:
-          return new Error(message || '접근 권한이 없습니다.');
+          return new Error(message || "접근 권한이 없습니다.");
         case 404:
-          return new Error(message || '요청한 리소스를 찾을 수 없습니다.');
+          return new Error(message || "요청한 리소스를 찾을 수 없습니다.");
         case 409:
-          return new Error(message || '이미 가입된 이메일입니다.');
+          return new Error(message || "이미 가입된 이메일입니다.");
         case 429:
-          return new Error(message || '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.');
+          return new Error(
+            message || "너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요."
+          );
         case 500:
-          return new Error(message || '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+          return new Error(
+            message || "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+          );
         default:
-          return new Error(message || '요청 처리 중 오류가 발생했습니다.');
+          return new Error(message || "요청 처리 중 오류가 발생했습니다.");
       }
     }
 

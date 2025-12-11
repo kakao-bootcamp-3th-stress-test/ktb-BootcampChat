@@ -3,8 +3,8 @@ package com.ktb.chatapp.websocket.socketio.handler;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnEvent;
-import com.ktb.chatapp.dto.MessageResponse;
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.message.MessageResponse;
+import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.MessageType;
 import com.ktb.chatapp.model.Room;
@@ -104,7 +104,7 @@ public class RoomLeaveHandler {
             systemMessage.setMetadata(new HashMap<>());
 
             Message savedMessage = messageRepository.save(systemMessage);
-            MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage, null);
+            MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage);
 
             socketIOServer.getRoomOperations(roomId)
                     .sendEvent(MESSAGE, response);

@@ -3,10 +3,10 @@ package com.ktb.chatapp.websocket.socketio.handler;
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnEvent;
-import com.ktb.chatapp.dto.FetchMessagesRequest;
-import com.ktb.chatapp.dto.FetchMessagesResponse;
-import com.ktb.chatapp.dto.JoinRoomSuccessResponse;
-import com.ktb.chatapp.dto.UserResponse;
+import com.ktb.chatapp.dto.message.FetchMessagesRequest;
+import com.ktb.chatapp.dto.message.FetchMessagesResponse;
+import com.ktb.chatapp.dto.rooms.JoinRoomSuccessResponse;
+import com.ktb.chatapp.dto.user.UserResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.MessageType;
 import com.ktb.chatapp.model.Room;
@@ -125,7 +125,7 @@ public class RoomJoinHandler {
 
             // 입장 메시지 브로드캐스트
             socketIOServer.getRoomOperations(roomId)
-                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage, null));
+                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage));
 
             // 참가자 목록 업데이트 브로드캐스트
             socketIOServer.getRoomOperations(roomId)

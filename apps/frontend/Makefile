@@ -6,7 +6,12 @@ DEPLOY_PATH ?= /home/ubuntu/ktb-chat-frontend
 
 # 로컬에서 프로덕션 빌드
 build-local:
+	@echo "🧹 Cleaning previous build..."
+	@rm -rf .next
 	@echo "🏗️  Building locally..."
+	@if [ -f .env.production ]; then \
+		echo "📝 Using .env.production file"; \
+	fi
 	npm run build:production
 	@echo "✅ Local build completed!"
 

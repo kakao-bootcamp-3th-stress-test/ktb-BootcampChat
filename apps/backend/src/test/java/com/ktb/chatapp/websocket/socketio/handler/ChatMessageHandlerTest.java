@@ -2,7 +2,7 @@ package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.SocketIOServer;
-import com.ktb.chatapp.dto.ChatMessageRequest;
+import com.ktb.chatapp.dto.message.ChatMessageRequest;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.FileRepository;

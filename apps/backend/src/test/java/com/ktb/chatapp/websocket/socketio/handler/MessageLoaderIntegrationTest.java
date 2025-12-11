@@ -1,9 +1,9 @@
 package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.ktb.chatapp.config.MongoTestContainer;
-import com.ktb.chatapp.dto.FetchMessagesRequest;
-import com.ktb.chatapp.dto.FetchMessagesResponse;
-import com.ktb.chatapp.dto.MessageResponse;
+import com.ktb.chatapp.dto.message.FetchMessagesRequest;
+import com.ktb.chatapp.dto.message.FetchMessagesResponse;
+import com.ktb.chatapp.dto.message.MessageResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.FileRepository;
@@ -63,7 +63,7 @@ class MessageLoaderIntegrationTest {
         // MessageLoader 인스턴스 생성
         messageLoader = new MessageLoader(
                 messageRepository,
-                userRepository,
+//                userRepository,
                 new MessageResponseMapper(fileRepository),
                 messageReadStatusService
         );
