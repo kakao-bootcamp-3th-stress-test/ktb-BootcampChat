@@ -79,6 +79,32 @@ sed -i '' "s/change_me_64_hex_chars____________________________________/$(openss
 sed -i '' "s/change_me_32_hex_chars________________/$(openssl rand -hex 16)/" .env
 ```
 
+## JVM 및 런타임 튜닝
+Socket.IO의 장시간 연결 간 JVM 옵션을 적용했습니다. 운영 환경에서는 아래 플래그를 `JAVA_TOOL_OPTIONS` 등에 추가하는 것을 권장합니다.
+
+```
+-Xms2g -Xmx2g
+-XX:+UseG1GC
+-XX:MaxGCPauseMillis=200
+-XX:InitiatingHeapOccupancyPercent=35
+-XX:+ParallelRefProcEnabled
+-XX:+UseContainerSupport
+-XX:InitialRAMPercentage=75
+-XX:MaxRAMPercentage=75
+-Xlog:gc*:file=/var/log/app/gc.log:time,uptime:filecount=5,filesize=10M
+```
+
+- `-Xms/-Xmx`는 서비스 특성에 맞게 조정하되, 동일한 값으로 설정해 힙 리사이징 비용을 없앱니다.
+- G1 관련 옵션은 Mixed GC를 일찍 시작해 Old Gen이 99%까지 차오르는 상황을 방지합니다.
+- 컨테이너 환경에서는 `UseContainerSupport`와 RAM 비율 옵션으로 OOM을 줄일 수 있습니다.
+- GC 로그를 저장해두면 문제 발생 시 `jcmd`, `jmap`, `jstack`과 함께 빠르게 원인을 파악할 수 있습니다.
+
+### 운영 환경 체크리스트
+- **OS 파일 디스크립터**: systemd 서비스나 `/etc/security/limits.conf`에 `LimitNOFILE=262144` 등을 설정해 Socket.IO 연결이 많은 상황에서도 `Too many open files`가 발생하지 않도록 합니다.
+- **Tomcat/Socket 설정**: `TOMCAT_THREADS_MAX`, `TOMCAT_ACCEPT_COUNT`, `SOCKET_MAX_IDLE_MS`, `SOCKET_CLEANUP_INTERVAL_MS` 같은 환경 변수를 통해 상황별 동접 한계와 idle 타임아웃을 조정할 수 있습니다.
+- **스토리지 전환**: 로컬에서 `FILE_STORAGE=local`, 운영에서는 `FILE_STORAGE=s3`와 `FILE_S3_*` 값(버킷/리전/액세스 키/퍼블릭 URL)을 CI/CD에서 주입하면 동일 바이너리로 손쉽게 전환됩니다.
+- **모니터링**: Grafana에 Heap > 85%, `process.files.open` > 80% of limit, GC pause 등 임계치 알람을 추가하고, 알람 발생 시 `lsof`, `jcmd`, `jstack` 명령으로 즉시 진단할 수 있게 스크립트를 준비합니다.
+
 ## 애플리케이션 실행
 가장 간편한 방법은 Maven Wrapper와 Makefile을 사용하는 것입니다.
 
