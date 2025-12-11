@@ -11,13 +11,14 @@ import com.ktb.chatapp.model.*;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
-import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.util.BannedWordChecker;
 import com.ktb.chatapp.websocket.socketio.ai.AiService;
 import com.ktb.chatapp.service.RateLimitService;
 import com.ktb.chatapp.service.RateLimitCheckResult;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
+import com.ktb.chatapp.service.UserLookupService;
+import com.ktb.chatapp.websocket.socketio.UserRooms;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -39,13 +40,14 @@ public class ChatMessageHandler {
     private final SocketIOServer socketIOServer;
     private final MessageRepository messageRepository;
     private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
     private final FileRepository fileRepository;
     private final AiService aiService;
     private final BannedWordChecker bannedWordChecker;
     private final RateLimitService rateLimitService;
     private final MeterRegistry meterRegistry;
     private final SocketConnectionTracker connectionTracker;
+    private final UserLookupService userLookupService;
+    private final UserRooms userRooms;
     
     @OnEvent(CHAT_MESSAGE)
     public void handleChatMessage(SocketIOClient client, ChatMessageRequest data) {
@@ -95,8 +97,8 @@ public class ChatMessageHandler {
         }
         
         try {
-            User sender = userRepository.findById(socketUser.id()).orElse(null);
-            if (sender == null) {
+            var sender = userLookupService.findUser(socketUser.id());
+            if (sender.isEmpty()) {
                 recordError("user_not_found");
                 client.sendEvent(ERROR, Map.of(
                     "code", "MESSAGE_ERROR",
@@ -107,8 +109,13 @@ public class ChatMessageHandler {
             }
 
             String roomId = data.getRoom();
-            Room room = roomRepository.findById(roomId).orElse(null);
-            if (room == null || !room.getParticipantIds().contains(socketUser.id())) {
+            boolean hasAccess = userRooms.isInRoom(socketUser.id(), roomId);
+            if (!hasAccess && roomRepository.existsByIdAndParticipantIdsContaining(roomId, socketUser.id())) {
+                userRooms.add(socketUser.id(), roomId);
+                hasAccess = true;
+            }
+
+            if (!hasAccess) {
                 recordError("room_access_denied");
                 client.sendEvent(ERROR, Map.of(
                     "code", "MESSAGE_ERROR",
