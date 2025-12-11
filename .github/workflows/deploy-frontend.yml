@@ -47,23 +47,43 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     env:
-      SERVER: ${{ inputs.deploy_servers || secrets.DEPLOY_SERVERS_FRONTEND }}
       USERNAME: ${{ secrets.DOCKER_USERNAME }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Get Frontend Server IPs from AWS
+        id: get-ips
+        run: |
+          if [ -n "${{ inputs.deploy_servers }}" ]; then
+            echo "servers=${{ inputs.deploy_servers }}" >> $GITHUB_OUTPUT
+          else
+            SERVERS=$(aws ec2 describe-instances \
+              --filters "Name=tag:Component,Values=frontend" "Name=instance-state-name,Values=running" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --output text | tr '\t' ' ')
+            echo "servers=$SERVERS" >> $GITHUB_OUTPUT
+          fi
       
       - name: Setup SSH key and known hosts
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          for server in $SERVER; do
+          for server in ${{ steps.get-ips.outputs.servers }}; do
             ssh-keyscan -H $server >> ~/.ssh/known_hosts 2>/dev/null || true
           done
 
       - name: Deploy to servers
         run: |
-          for server in $SERVER; do
+          for server in ${{ steps.get-ips.outputs.servers }}; do
+            echo "Deploying to $server..."
             ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && export DOCKER_USERNAME=$USERNAME && sudo -E docker pull $USERNAME/ktb-chat-frontend:latest && sudo -E docker compose up -d --force-recreate"
           done

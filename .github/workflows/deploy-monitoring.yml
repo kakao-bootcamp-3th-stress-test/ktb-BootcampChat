@@ -14,35 +14,50 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SERVER: 3.36.94.254
       GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
       GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Get Observer Server IP from AWS
+        id: get-ips
+        run: |
+          SERVER=$(aws ec2 describe-instances \
+            --filters "Name=tag:Component,Values=observer" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text)
+          echo "server=$SERVER" >> $GITHUB_OUTPUT
+
       - name: Setup SSH key and known hosts
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H $SERVER >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ${{ steps.get-ips.outputs.server }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Create remote directories
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/monitoring/prometheus/targets /home/ubuntu/monitoring/grafana/provisioning/datasources /home/ubuntu/monitoring/grafana/provisioning/dashboards"
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ steps.get-ips.outputs.server }} "mkdir -p /home/ubuntu/monitoring/prometheus/targets /home/ubuntu/monitoring/grafana/provisioning/datasources /home/ubuntu/monitoring/grafana/provisioning/dashboards"
 
       - name: Copy monitoring configuration files
         run: |
-          scp -i ~/.ssh/id_rsa -r apps/backend/monitoring/* ubuntu@$SERVER:/home/ubuntu/monitoring/
-          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.o11y.yaml ubuntu@$SERVER:/home/ubuntu/
+          scp -i ~/.ssh/id_rsa -r apps/backend/monitoring/* ubuntu@${{ steps.get-ips.outputs.server }}:/home/ubuntu/monitoring/
+          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.o11y.yaml ubuntu@${{ steps.get-ips.outputs.server }}:/home/ubuntu/
 
       - name: Deploy monitoring stack
         run: |
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && export ENVIRONMENT=prod && export GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin} && export GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin} && sudo -E docker compose -f docker-compose.o11y.yaml pull && sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate"
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ steps.get-ips.outputs.server }} "cd /home/ubuntu && export ENVIRONMENT=prod && export GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin} && export GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin} && sudo -E docker compose -f docker-compose.o11y.yaml pull && sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate"
 
       - name: Verify deployment
         run: |
           sleep 10
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=prometheus-ktb' --filter 'name=grafana-ktb' --filter 'name=cadvisor' --format 'table {{.Names}}\t{{.Status}}'"
+          ssh -i ~/.ssh/id_rsa ubuntu@${{ steps.get-ips.outputs.server }} "sudo docker ps --filter 'name=prometheus-ktb' --filter 'name=grafana-ktb' --filter 'name=cadvisor' --format 'table {{.Names}}\t{{.Status}}'"
 
