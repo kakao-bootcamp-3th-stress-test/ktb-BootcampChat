@@ -15,21 +15,36 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'
     scrape_interval: 5s
     static_configs:
-      - targets: ['IP:PORT']
+      - targets: ['43.203.209.8:5001']
         labels:
           application: 'ktb-chat-backend'
           environment: 'production'
 
   - job_name: 'mongodb'
     static_configs:
-      - targets: ['IP:PORT']
+      - targets: ['43.203.170.199:9216']
         labels:
           environment: 'production'
 
   - job_name: 'redis'
     static_configs:
-      - targets: ['IP:PORT']
+      - targets: ['3.36.49.219:9121']
         labels:
+          environment: 'production'
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          environment: 'production'
+
+  - job_name: 'nextjs-app'
+    metrics_path: '/api/metrics'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['52.78.1.186:3000']
+        labels:
+          application: 'ktb-chat-frontend'
           environment: 'production'
 
   - job_name: 'node-exporter'

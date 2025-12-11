@@ -59,6 +59,9 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
+    depends_on:
+      - mongodb-exporter
+      - redis-exporter
 
   grafana:
     image: grafana/grafana:11.4.0
@@ -77,8 +80,36 @@ services:
     depends_on:
       - prometheus
 
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: minio-ktb
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  minio-setup:
+    image: minio/mc:RELEASE.2024-12-18T14-16-47Z
+    container_name: minio-setup-ktb
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minio} ${MINIO_ROOT_PASSWORD:-minio123} &&
+      mc mb --ignore-existing local/${FILE_S3_BUCKET:-ktb-chat-files} &&
+      mc policy set download local/${FILE_S3_BUCKET:-ktb-chat-files}
+      "
+    restart: "no"
+
 volumes:
   mongo_data:
   redis_data:
   prometheus_data:
   grafana_data:
+  minio_data:

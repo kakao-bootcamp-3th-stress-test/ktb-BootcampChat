@@ -14,10 +14,14 @@ import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,8 +83,12 @@ public class RoomService {
             }
 
             // Room을 RoomResponse로 변환
-            List<RoomResponse> roomResponses = roomPage.getContent().stream()
-                .map(room -> mapToRoomResponse(room, name))
+            List<Room> rooms = roomPage.getContent();
+            Map<String, User> usersById = loadUsersForRooms(rooms);
+            Map<String, Long> recentCounts = loadRecentMessageCounts(rooms);
+
+            List<RoomResponse> roomResponses = rooms.stream()
+                .map(room -> mapToRoomResponse(room, name, usersById, recentCounts))
                 .collect(Collectors.toList());
 
             // 메타데이터 생성
@@ -176,7 +184,9 @@ public class RoomService {
         
         // Publish event for room created
         try {
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name);
+            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom));
+            Map<String, Long> recentCounts = loadRecentMessageCounts(List.of(savedRoom));
+            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts);
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
@@ -215,7 +225,9 @@ public class RoomService {
         
         // Publish event for room updated
         try {
-            RoomResponse roomResponse = mapToRoomResponse(room, name);
+            Map<String, User> usersById = loadUsersForRooms(List.of(room));
+            Map<String, Long> recentCounts = loadRecentMessageCounts(List.of(room));
+            RoomResponse roomResponse = mapToRoomResponse(room, name, usersById, recentCounts);
             eventPublisher.publishEvent(new RoomUpdatedEvent(this, roomId, roomResponse));
         } catch (Exception e) {
             log.error("roomUpdate 이벤트 발행 실패", e);
@@ -224,23 +236,21 @@ public class RoomService {
         return room;
     }
 
-    private RoomResponse mapToRoomResponse(Room room, String name) {
+    private RoomResponse mapToRoomResponse(
+            Room room,
+            String requesterIdentity,
+            Map<String, User> usersById,
+            Map<String, Long> recentCounts) {
         if (room == null) return null;
 
-        User creator = null;
-        if (room.getCreator() != null) {
-            creator = userRepository.findById(room.getCreator()).orElse(null);
-        }
+        User creator = room.getCreator() != null ? usersById.get(room.getCreator()) : null;
 
         List<User> participants = room.getParticipantIds().stream()
-            .map(userRepository::findById)
-            .filter(Optional::isPresent)
-            .map(Optional::get)
+            .map(usersById::get)
+            .filter(java.util.Objects::nonNull)
             .toList();
 
-        // 최근 10분간 메시지 수 조회
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
-        long recentMessageCount = messageRepository.countRecentMessagesByRoomId(room.getId(), tenMinutesAgo);
+        long recentMessageCount = recentCounts.getOrDefault(room.getId(), 0L);
 
         return RoomResponse.builder()
             .id(room.getId())
@@ -260,8 +270,52 @@ public class RoomService {
                     .build())
                 .collect(Collectors.toList()))
             .createdAtDateTime(room.getCreatedAt())
-            .isCreator(creator != null && creator.getId().equals(name))
+            .isCreator(creator != null && creator.getEmail() != null &&
+                creator.getEmail().equalsIgnoreCase(requesterIdentity))
             .recentMessageCount((int) recentMessageCount)
             .build();
+    }
+
+    private Map<String, User> loadUsersForRooms(List<Room> rooms) {
+        if (rooms == null || rooms.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<String> userIds = new HashSet<>();
+        for (Room room : rooms) {
+            if (room.getCreator() != null) {
+                userIds.add(room.getCreator());
+            }
+            if (room.getParticipantIds() != null) {
+                userIds.addAll(room.getParticipantIds());
+            }
+        }
+        if (userIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, User> result = new HashMap<>();
+        Iterable<User> users = userRepository.findAllById(userIds);
+        for (User user : users) {
+            result.put(user.getId(), user);
+        }
+        return result;
+    }
+
+    private Map<String, Long> loadRecentMessageCounts(List<Room> rooms) {
+        if (rooms == null || rooms.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<String> roomIds = rooms.stream()
+            .map(Room::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (roomIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+        List<MessageRepository.RoomMessageCount> counts =
+            messageRepository.countRecentMessagesByRoomIds(roomIds, tenMinutesAgo);
+        Map<String, Long> result = new HashMap<>();
+        counts.forEach(count -> result.put(count.getId(), count.getCount()));
+        return result;
     }
 }

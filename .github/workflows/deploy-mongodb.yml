@@ -1,0 +1,49 @@
+name: Deploy MongoDB
+
+on:
+  push:
+    branches:
+      - ci-cd
+    paths:
+      - 'apps/backend/docker-compose.mongo.yaml'
+      - '.github/workflows/deploy-mongodb.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Get MongoDB Server IP and Deploy
+        run: |
+          # Get server IP
+          SERVER=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=mongodb" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text)
+          
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          # Copy docker-compose file
+          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.mongo.yaml ubuntu@$SERVER:/home/ubuntu/
+          
+          # Deploy MongoDB stack
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker compose -f docker-compose.mongo.yaml pull && sudo docker compose -f docker-compose.mongo.yaml up -d --force-recreate"
+          
+          # Verify deployment
+          sleep 10
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=mongo' --filter 'name=mongodb-exporter' --format 'table {{.Names}}\t{{.Status}}'"
+

@@ -6,6 +6,7 @@ import com.ktb.chatapp.dto.message.FetchMessagesRequest;
 import com.ktb.chatapp.dto.message.FetchMessagesResponse;
 import com.ktb.chatapp.model.Room;
 import com.ktb.chatapp.repository.RoomRepository;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -27,9 +28,11 @@ public class MessageFetchHandler {
 
     private final RoomRepository roomRepository;
     private final MessageLoader messageLoader;
+    private final SocketConnectionTracker connectionTracker;
 
     @OnEvent(FETCH_PREVIOUS_MESSAGES)
     public void handleFetchMessages(SocketIOClient client, FetchMessagesRequest data) {
+        connectionTracker.touch(client);
         String userId = getUserId(client);
         String queueKey = data.roomId() + ":" + userId;
         if (userId == null) {
@@ -77,6 +80,6 @@ public class MessageFetchHandler {
 
     private String getUserId(SocketIOClient client) {
         var user = (SocketUser) client.get("user");
-        return user.id();
+        return user != null ? user.id() : null;
     }
 }
