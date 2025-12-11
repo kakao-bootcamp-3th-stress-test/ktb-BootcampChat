@@ -95,7 +95,7 @@ public class MessageLoader {
         if (fileIds.isEmpty()) {
             return Map.of();
         }
-        return fileRepository.findAllById(fileIds).stream()
+        return fileRepository.findAllById(List.copyOf(fileIds)).stream()
                 .collect(Collectors.toMap(File::getId, file -> file));
     }
 

@@ -35,7 +35,7 @@ public class MessageResponseMapper {
     }
 
     public MessageResponse mapToMessageResponse(Message message, Map<String, File> preloadedFiles) {
-        MessageResponse.MessageResponseBuilder builder = MessageResponse.builder()
+        var builder = MessageResponse.builder()
                 .id(message.getId())
                 .content(message.getContent())
                 .type(message.getType())
@@ -47,7 +47,9 @@ public class MessageResponseMapper {
                 .readers(message.getReaders() != null ?
                         message.getReaders() : new ArrayList<>());
 
-        attachFileMetadata(message, builder, preloadedFiles);
+        resolveFile(message, preloadedFiles)
+                .map(this::mapToFileResponse)
+                .ifPresent(builder::file);
 
         // 메타데이터 설정
         if (message.getMetadata() != null) {
@@ -57,26 +59,15 @@ public class MessageResponseMapper {
         return builder.build();
     }
 
-    private void attachFileMetadata(Message message,
-                                    MessageResponse.MessageResponseBuilder builder,
-                                    Map<String, File> preloadedFiles) {
+    private Optional<File> resolveFile(Message message, Map<String, File> preloadedFiles) {
         String fileId = message.getFileId();
         if (fileId == null) {
-            return;
+            return Optional.empty();
         }
-
-        File file = null;
-        if (preloadedFiles != null) {
-            file = preloadedFiles.get(fileId);
+        if (preloadedFiles != null && preloadedFiles.containsKey(fileId)) {
+            return Optional.ofNullable(preloadedFiles.get(fileId));
         }
-        if (file == null) {
-            file = fileRepository.findById(fileId).orElse(null);
-        }
-        if (file == null) {
-            return;
-        }
-
-        builder.file(mapToFileResponse(file));
+        return fileRepository.findById(fileId);
     }
 
     private FileResponse mapToFileResponse(File file) {

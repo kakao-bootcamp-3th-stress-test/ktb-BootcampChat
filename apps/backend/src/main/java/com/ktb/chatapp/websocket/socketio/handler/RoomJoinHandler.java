@@ -172,10 +172,11 @@ public class RoomJoinHandler {
         if (roomOpt.isEmpty()) {
             return List.of();
         }
-        List<String> participantIds = roomOpt.get().getParticipantIds();
-        if (participantIds == null || participantIds.isEmpty()) {
+        Set<String> participantIdSet = roomOpt.get().getParticipantIds();
+        if (participantIdSet == null || participantIdSet.isEmpty()) {
             return List.of();
         }
+        List<String> participantIds = new ArrayList<>(participantIdSet);
         return userRepository.findAllById(participantIds).stream()
                 .map(UserResponse::from)
                 .toList();

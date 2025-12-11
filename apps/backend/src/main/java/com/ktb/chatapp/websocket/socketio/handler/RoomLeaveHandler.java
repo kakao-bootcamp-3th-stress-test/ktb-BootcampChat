@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -152,11 +153,12 @@ public class RoomLeaveHandler {
             participantCache.evict(roomId);
             return List.of();
         }
-        List<String> participantIds = roomOpt.get().getParticipantIds();
-        if (participantIds == null || participantIds.isEmpty()) {
+        Set<String> participantIdSet = roomOpt.get().getParticipantIds();
+        if (participantIdSet == null || participantIdSet.isEmpty()) {
             participantCache.evict(roomId);
             return List.of();
         }
+        List<String> participantIds = new ArrayList<>(participantIdSet);
         return userRepository.findAllById(participantIds).stream()
                 .map(UserResponse::from)
                 .toList();
