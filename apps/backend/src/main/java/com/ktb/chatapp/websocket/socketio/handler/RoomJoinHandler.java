@@ -17,6 +17,7 @@ import com.ktb.chatapp.websocket.socketio.RoomParticipantCache;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
+import com.ktb.chatapp.websocket.socketio.message.MessageDispatchQueue;
 import java.time.LocalDateTime;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class RoomJoinHandler {
     private final MessageResponseMapper messageResponseMapper;
     private final SocketConnectionTracker connectionTracker;
     private final RoomParticipantCache participantCache;
+    private final MessageDispatchQueue messageDispatchQueue;
     
     @OnEvent(JOIN_ROOM)
     public void handleJoinRoom(SocketIOClient client, String roomId) {
@@ -118,8 +120,7 @@ public class RoomJoinHandler {
             client.sendEvent(JOIN_ROOM_SUCCESS, response);
 
             // 입장 메시지 브로드캐스트
-            socketIOServer.getRoomOperations(roomId)
-                .sendEvent(MESSAGE, messageResponseMapper.mapToMessageResponse(joinMessage));
+            messageDispatchQueue.enqueue(messageResponseMapper.mapToMessageResponse(joinMessage));
 
             // 참가자 목록 업데이트 브로드캐스트
             socketIOServer.getRoomOperations(roomId)
