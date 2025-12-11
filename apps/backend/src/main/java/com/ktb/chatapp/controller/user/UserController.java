@@ -134,9 +134,21 @@ public class UserController {
         } catch (IllegalArgumentException e) {
             log.error("프로필 이미지 업로드 실패 - 잘못된 입력: {}", e.getMessage());
             return ResponseEntity.badRequest().body(StandardResponse.error(e.getMessage()));
+        } catch (RuntimeException e) {
+            log.error("프로필 이미지 업로드 실패 - RuntimeException: {}", e.getMessage(), e);
+            // RuntimeException은 보통 S3 업로드 실패 등 구체적인 원인을 포함
+            String errorMessage = e.getMessage();
+            if (errorMessage == null || errorMessage.isEmpty()) {
+                errorMessage = "이미지 업로드 중 오류가 발생했습니다.";
+            }
+            return ResponseEntity.internalServerError().body(StandardResponse.error(errorMessage));
         } catch (Exception e) {
-            log.error("프로필 이미지 업로드 중 오류 발생: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().body(StandardResponse.error("이미지 업로드 중 오류가 발생했습니다."));
+            log.error("프로필 이미지 업로드 중 예기치 않은 오류 발생: {}", e.getMessage(), e);
+            String errorMessage = "이미지 업로드 중 오류가 발생했습니다.";
+            if (e.getCause() != null && e.getCause().getMessage() != null) {
+                errorMessage += " (" + e.getCause().getMessage() + ")";
+            }
+            return ResponseEntity.internalServerError().body(StandardResponse.error(errorMessage));
         }
     }
 

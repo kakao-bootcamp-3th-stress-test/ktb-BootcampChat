@@ -67,6 +67,14 @@ make verify-java
 | `PORT` | ✅ | `5001` | HTTP API 포트 (`server.port`) |
 | `WS_PORT` | ✅ | `5002` | Socket.IO 서버 포트             |
 | `OPENAI_API_KEY` | ❌ | `your_openai_api_key_here` | OpenAI 호출용 API Key          |
+| `FILE_STORAGE` | ✅ | `s3` | `local` 또는 `s3` 중 선택 |
+| `FILE_S3_BUCKET` | ✅ (when `FILE_STORAGE=s3`) | `ktb-chat-files-1765426659` | 저장 버킷 이름 |
+| `FILE_S3_REGION` | ✅ | `ap-northeast-2` | AWS/MinIO 리전 |
+| `FILE_S3_ENDPOINT` | ❌ | 빈 값 | MinIO와 같이 S3 호환 스토리지 엔드포인트 |
+| `FILE_S3_ACCESS_KEY` | ✅ | 없음 | S3 액세스 키 |
+| `FILE_S3_SECRET_KEY` | ✅ | 없음 | S3 시크릿 키 |
+| `FILE_S3_PATH_STYLE` | ❌ | `false` | MinIO 등 path-style이 필요한 경우 `true` |
+| `FILE_PUBLIC_BASE_URL` | ❌ | CloudFront 배포 URL | 파일 접근용 베이스 URL |
 
 `.env.template` 파일을 복사해 기본 값을 채운 뒤 필요에 따라 수정하세요. `make setup-env` 명령어로 자동 생성할 수도 있습니다.
 
@@ -78,6 +86,23 @@ cp .env.template .env
 sed -i '' "s/change_me_64_hex_chars____________________________________/$(openssl rand -hex 32)/" .env
 sed -i '' "s/change_me_32_hex_chars________________/$(openssl rand -hex 16)/" .env
 ```
+
+### 파일 스토리지 (MinIO/S3) 설정
+
+로컬 개발에서 `docker-compose.dev.yaml`의 MinIO를 사용할 경우 `.env`에 다음 값을 추가하면 됩니다.
+
+```env
+FILE_STORAGE=s3
+FILE_S3_BUCKET=ktb-chat-files
+FILE_S3_REGION=ap-northeast-2
+FILE_S3_ENDPOINT=http://localhost:9000
+FILE_S3_ACCESS_KEY=minio
+FILE_S3_SECRET_KEY=minio123
+FILE_S3_PATH_STYLE=true
+FILE_PUBLIC_BASE_URL=http://localhost:9000/ktb-chat-files
+```
+
+프로덕션에서 AWS S3를 사용할 때는 위 값을 실제 버킷/리전/CloudFront URL 등으로 교체하세요.
 
 ## JVM 및 런타임 튜닝
 Socket.IO의 장시간 연결 간 JVM 옵션을 적용했습니다. 운영 환경에서는 아래 플래그를 `JAVA_TOOL_OPTIONS` 등에 추가하는 것을 권장합니다.

@@ -65,33 +65,52 @@ public class UserService {
      * @param email 사용자 이메일
      */
     public ProfileImageResponse uploadProfileImage(String email, MultipartFile file) {
-        // 사용자 조회
-        User user = userRepository.findByEmail(email.toLowerCase())
-                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+        try {
+            // 사용자 조회
+            User user = userRepository.findByEmail(email.toLowerCase())
+                    .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
 
-        // 파일 유효성 검증
-        validateProfileImageFile(file);
+            // 파일 유효성 검증
+            validateProfileImageFile(file);
 
-        // 기존 프로필 이미지 삭제
-        if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
-            deleteOldProfileImage(user.getProfileImage());
+            // 기존 프로필 이미지 삭제
+            if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
+                deleteOldProfileImage(user.getProfileImage());
+            }
+
+            // 새 파일 저장 (보안 검증 포함)
+            String profileImageUrl = fileService.storeFile(file, "profiles");
+            
+            if (profileImageUrl == null || profileImageUrl.isEmpty()) {
+                log.error("프로필 이미지 URL이 생성되지 않았습니다 - User: {}", email);
+                throw new RuntimeException("프로필 이미지 URL이 생성되지 않았습니다.");
+            }
+
+            // 사용자 프로필 이미지 URL 업데이트
+            user.setProfileImage(profileImageUrl);
+            user.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            log.info("프로필 이미지 업로드 완료 - User ID: {}, File: {}", user.getId(), profileImageUrl);
+
+            return new ProfileImageResponse(
+                    true,
+                    "프로필 이미지가 업데이트되었습니다.",
+                    profileImageUrl
+            );
+        } catch (UsernameNotFoundException e) {
+            log.error("프로필 이미지 업로드 실패 - 사용자 없음: {}", email);
+            throw e;
+        } catch (IllegalArgumentException e) {
+            log.error("프로필 이미지 업로드 실패 - 유효성 검증 실패: {}", e.getMessage());
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("프로필 이미지 업로드 실패 - 저장 오류: {}", e.getMessage(), e);
+            throw new RuntimeException("프로필 이미지 업로드에 실패했습니다: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("프로필 이미지 업로드 중 예기치 않은 오류: {}", e.getMessage(), e);
+            throw new RuntimeException("프로필 이미지 업로드 중 오류가 발생했습니다: " + e.getMessage(), e);
         }
-
-        // 새 파일 저장 (보안 검증 포함)
-        String profileImageUrl = fileService.storeFile(file, "profiles");
-
-        // 사용자 프로필 이미지 URL 업데이트
-        user.setProfileImage(profileImageUrl);
-        user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
-
-        log.info("프로필 이미지 업로드 완료 - User ID: {}, File: {}", user.getId(), profileImageUrl);
-
-        return new ProfileImageResponse(
-                true,
-                "프로필 이미지가 업데이트되었습니다.",
-                profileImageUrl
-        );
     }
 
     /**

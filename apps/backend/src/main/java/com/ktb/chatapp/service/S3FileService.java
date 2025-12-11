@@ -26,7 +26,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
@@ -106,11 +105,18 @@ public class S3FileService implements FileService {
                     ? subDirectory + "/" + safeFileName
                     : safeFileName;
 
+            log.info("Storing file to S3 - Key: {}, Size: {}, ContentType: {}", key, file.getSize(), file.getContentType());
             uploadToS3(file, key, true);
 
-            return buildPublicUrl(key);
+            String publicUrl = buildPublicUrl(key);
+            log.info("File stored successfully - Key: {}, URL: {}", key, publicUrl);
+            return publicUrl;
         } catch (IOException e) {
+            log.error("Failed to store file - SubDirectory: {}, Error: {}", subDirectory, e.getMessage(), e);
             throw new RuntimeException("프로필 이미지를 저장할 수 없습니다: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error storing file - SubDirectory: {}", subDirectory, e);
+            throw new RuntimeException("파일 저장 중 예기치 않은 오류가 발생했습니다: " + e.getMessage(), e);
         }
     }
 
@@ -183,15 +189,27 @@ public class S3FileService implements FileService {
     }
 
     private void uploadToS3(MultipartFile file, String key, boolean publicRead) throws IOException {
-        PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .contentType(file.getContentType())
-                .acl(publicRead ? ObjectCannedACL.PUBLIC_READ : ObjectCannedACL.PRIVATE)
-                .build();
+        try {
+            PutObjectRequest.Builder requestBuilder = PutObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .contentType(file.getContentType());
+            
+            // OAC 사용 시 ACL은 무시되므로 제거 (에러 방지)
+            // 버킷 정책과 OAC로 접근 제어
+            
+            PutObjectRequest request = requestBuilder.build();
 
-        s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
-        log.info("Uploaded object to S3: {}/{}", bucketName, key);
+            s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            log.info("Uploaded object to S3: {}/{}", bucketName, key);
+        } catch (software.amazon.awssdk.services.s3.model.S3Exception e) {
+            log.error("S3 upload failed - Bucket: {}, Key: {}, Error: {}, Status: {}", 
+                    bucketName, key, e.getMessage(), e.statusCode(), e);
+            throw new IOException("S3 업로드 실패: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("S3 upload error - Bucket: {}, Key: {}", bucketName, key, e);
+            throw new IOException("파일 업로드 중 오류 발생: " + e.getMessage(), e);
+        }
     }
 
     private void deleteObject(String key) {
@@ -207,10 +225,13 @@ public class S3FileService implements FileService {
 
     private String buildPublicUrl(String key) {
         if (!StringUtils.hasText(publicBaseUrl)) {
+            log.warn("publicBaseUrl이 설정되지 않았습니다. Key만 반환: {}", key);
             return key;
         }
         String base = publicBaseUrl.endsWith("/") ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1) : publicBaseUrl;
-        return base + "/" + key;
+        String url = base + "/" + key;
+        log.debug("Public URL 생성 - Key: {}, URL: {}", key, url);
+        return url;
     }
 
     private String extractKeyFromUrl(String url) {
