@@ -80,5 +80,5 @@ jobs:
             [ -n "$server" ] || continue
             ssh-keyscan -H "$server" >> ~/.ssh/known_hosts 2>/dev/null || true
             echo "Deploying to $server..."
-            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && export DOCKER_USERNAME=$USERNAME && export MONGO_URI=$MONGO && export REDIS_HOST=$REDIS_H && export REDIS_PORT=$REDIS_P && export JWT_SECRET=$JWT && export ENCRYPTION_KEY=$ENC_KEY && export ENCRYPTION_SALT=$ENC_SALT && sudo -E docker pull $USERNAME/ktb-chat-backend:latest && sudo -E docker compose up -d --force-recreate"
+            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && sudo docker image prune -a -f && export DOCKER_USERNAME=$USERNAME && export MONGO_URI=$MONGO && export REDIS_HOST=$REDIS_H && export REDIS_PORT=$REDIS_P && export JWT_SECRET=$JWT && export ENCRYPTION_KEY=$ENC_KEY && export ENCRYPTION_SALT=$ENC_SALT && sudo -E docker pull $USERNAME/ktb-chat-backend:latest && sudo -E docker compose up -d --force-recreate"
           done
