@@ -62,8 +62,12 @@ make verify-java
 | `ENCRYPTION_SALT` | ✅ | 없음 | 암복호화에 사용하는 솔트 값             |
 | `JWT_SECRET` | ✅ | 없음 | HMAC-SHA256 JWT 서명 비밀키      |
 | `MONGO_URI` | ✅ | `mongodb://localhost:27017/bootcamp-chat` | MongoDB 연결 문자열              |
-| `REDIS_HOST` | ✅ | `-` | Redis 연결 문자열                |
-| `REDIS_PORT` | ✅ | `-` | Redis 연결 문자열                |
+| `REDIS_HOST` | ✅ | `-` | 메인 Redis (캐시, Socket.IO 스토어) 호스트 |
+| `REDIS_PORT` | ✅ | `-` | 메인 Redis 포트                   |
+| `PUBSUB_REDIS_HOST` | ❌ | `REDIS_HOST` 와 동일 | (선택) 채팅 Pub/Sub 전용 Redis 호스트 |
+| `PUBSUB_REDIS_PORT` | ❌ | `REDIS_PORT` 와 동일 | (선택) 채팅 Pub/Sub 전용 Redis 포트  |
+| `PUBSUB_REDIS_SSL` | ❌ | `REDIS_SSL` 과 동일 | (선택) Pub/Sub Redis TLS(rediss) 사용 여부 |
+| `PUBSUB_REDIS_ENABLED` | ❌ | `false` | `true` 이면 Redis Pub/Sub 기반 브로드캐스트 활성화 |
 | `PORT` | ✅ | `5001` | HTTP API 포트 (`server.port`) |
 | `WS_PORT` | ✅ | `5002` | Socket.IO 서버 포트             |
 | `OPENAI_API_KEY` | ❌ | `your_openai_api_key_here` | OpenAI 호출용 API Key          |
@@ -204,7 +208,53 @@ docker compose up -d
 ```
 MongoDB와 Redis가 이미 실행 중이라면 이 단계를 건너뛸 수 있습니다.
 
+## Redis Pub/Sub 설정 (부하테스트 최적화)
+
+부하테스트 대회를 위해 **메인 Redis와 Pub/Sub Redis를 분리**하는 구조를 지원합니다.
+
+### 아키텍처
+
+- **메인 Redis**: Socket.IO 스토어, 유저 프로필 캐시, 방 참가자 캐시 등 상태 저장
+- **Pub/Sub Redis**: 채팅 메시지 브로드캐스트 전용 (멀티 인스턴스 확장 지원)
+
+### 설정 방법
+
+1. **GitHub Secrets에 다음 값 추가**:
+   ```
+   PUBSUB_REDIS_HOST=10.0.101.5        # Pub/Sub Redis 프라이빗 IP
+   PUBSUB_REDIS_PORT=6379
+   PUBSUB_REDIS_ENABLED=true
+   ```
+
+2. **메인 Redis 설정** (기존과 동일):
+   ```
+   REDIS_HOST=10.0.101.227              # 메인 Redis 프라이빗 IP
+   REDIS_PORT=6379
+   ```
+
+3. **배포 후 확인**:
+   - 백엔드 로그에서 `Subscribed to Redis pub/sub channel for chat messages: chat:messages` 메시지 확인
+   - 메시지 전송 시 모든 인스턴스에서 브로드캐스트되는지 확인
+
+### 동작 방식
+
+- `PUBSUB_REDIS_ENABLED=false` (기본): 기존처럼 직접 Socket.IO 브로드캐스트
+- `PUBSUB_REDIS_ENABLED=true`: 
+  - 메시지 저장 후 Redis Pub/Sub으로 발행
+  - 모든 백엔드 인스턴스가 구독하여 로컬 클라이언트에게만 브로드캐스트
+  - **멀티 인스턴스 확장 시 자동으로 모든 노드에 메시지 전파**
+
+### 인프라 구성
+
+- **EC2 인스턴스 2대** (t3.small):
+  - `Role=database`, `Service=redis-main`: 메인 Redis
+  - `Role=database`, `Service=redis-pubsub`: Pub/Sub Redis
+- **배포 워크플로우**:
+  - `deploy-redis.yml`: 메인 Redis 배포
+  - `deploy-redis-pubsub.yml`: Pub/Sub Redis 배포
+
 ## 트러블슈팅
 - `.env`의 필수 키가 누락되면 애플리케이션이 부팅 중 예외를 발생시킵니다.
 - MongoDB/Redis 연결 오류 시 `docker compose ps`로 컨테이너 상태를 확인하거나 `application.properties`의 기본값을 검토하세요.
 - OpenAI 통합을 사용하지 않을 경우 `OPENAI_API_KEY`를 제거하면 관련 기능은 비활성화됩니다.
+- Pub/Sub Redis 연결 실패 시 `PUBSUB_REDIS_ENABLED=false`로 설정하면 기존 방식으로 폴백됩니다.

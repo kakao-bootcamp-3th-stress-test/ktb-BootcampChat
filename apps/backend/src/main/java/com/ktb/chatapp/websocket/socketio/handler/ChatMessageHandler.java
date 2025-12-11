@@ -15,6 +15,7 @@ import com.ktb.chatapp.util.BannedWordChecker;
 import com.ktb.chatapp.websocket.socketio.ai.AiService;
 import com.ktb.chatapp.service.RateLimitService;
 import com.ktb.chatapp.service.RateLimitCheckResult;
+import com.ktb.chatapp.websocket.socketio.ChatMessagePublisher;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.service.UserLookupService;
@@ -48,6 +49,8 @@ public class ChatMessageHandler {
     private final SocketConnectionTracker connectionTracker;
     private final UserLookupService userLookupService;
     private final UserRooms userRooms;
+    private final ChatMessagePublisher chatMessagePublisher;
+    private final MessageResponseMapper messageResponseMapper;
     
     @OnEvent(CHAT_MESSAGE)
     public void handleChatMessage(SocketIOClient client, ChatMessageRequest data) {
@@ -154,9 +157,10 @@ public class ChatMessageHandler {
             }
 
             Message savedMessage = messageRepository.save(message);
+            MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage);
 
-            socketIOServer.getRoomOperations(roomId)
-                    .sendEvent(MESSAGE, createMessageResponse(savedMessage));
+            // 채팅 메시지 브로드캐스트는 ChatMessagePublisher 에 위임
+            chatMessagePublisher.publish(response);
 
             // AI 멘션 처리
             aiService.handleAIMentions(roomId, socketUser.id(), messageContent);
@@ -224,25 +228,6 @@ public class ChatMessageHandler {
         message.setMentions(messageContent.aiMentions());
 
         return message;
-    }
-
-    private MessageResponse createMessageResponse(Message message) {
-        var messageResponse = new MessageResponse();
-        messageResponse.setId(message.getId());
-        messageResponse.setRoomId(message.getRoomId());
-        messageResponse.setContent(message.getContent());
-        messageResponse.setType(message.getType());
-        messageResponse.setTimestamp(message.toTimestampMillis());
-        messageResponse.setReactions(message.getReactions() != null ? message.getReactions() : Collections.emptyMap());
-        messageResponse.setSenderId(message.getSenderId());
-        messageResponse.setMetadata(message.getMetadata());
-
-        if (message.getFileId() != null) {
-            fileRepository.findById(message.getFileId())
-                    .ifPresent(file -> messageResponse.setFile(FileResponse.from(file)));
-        }
-
-        return messageResponse;
     }
 
     // Metrics helper methods
