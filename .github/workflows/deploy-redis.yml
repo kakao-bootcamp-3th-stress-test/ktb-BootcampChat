@@ -13,7 +13,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SERVER: ${{ secrets.REDIS_SERVER_IP }}
+      SERVER: 3.36.49.219
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

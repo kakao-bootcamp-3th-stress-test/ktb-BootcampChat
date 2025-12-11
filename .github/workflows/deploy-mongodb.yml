@@ -13,7 +13,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      SERVER: ${{ secrets.MONGODB_SERVER_IP }}
+      SERVER: 43.203.170.199
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
