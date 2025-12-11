@@ -53,7 +53,7 @@ export const useRoomHandling = (
   const handleSessionError = async () => {
     try {
       if (!user) {
-        throw new Error("No user session found");
+        throw new Error("No authenticated user found");
       }
 
       await refreshToken();
@@ -71,7 +71,7 @@ export const useRoomHandling = (
 
   const setupSocket = useCallback(async () => {
     try {
-      if (!user?.token || !user?.sessionId) {
+      if (!user?.token) {
         throw new Error("Invalid authentication state");
       }
 
@@ -99,8 +99,7 @@ export const useRoomHandling = (
 
       const socket = await socketService.connect({
         auth: {
-          token: user.token,
-          sessionId: user.sessionId
+          token: user.token
         },
         transports: ["websocket", "polling"],
         reconnection: true,
@@ -162,7 +161,7 @@ export const useRoomHandling = (
   const fetchRoomData = useCallback(
     async (roomId) => {
       try {
-        if (!user?.token || !user?.sessionId) {
+        if (!user?.token) {
           await handleSessionError();
           throw new Error("인증 정보가 유효하지 않습니다.");
         }
@@ -178,8 +177,7 @@ export const useRoomHandling = (
             headers: {
               Accept: "application/json",
               "Content-Type": "application/json",
-              "x-auth-token": user.token,
-              "x-session-id": user.sessionId
+              "x-auth-token": user.token
             },
             credentials: "include"
           }

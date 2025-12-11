@@ -4,9 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ktb.chatapp.config.MongoTestContainer;
 import com.ktb.chatapp.dto.user.LoginRequest;
 import com.ktb.chatapp.dto.user.RegisterRequest;
-import com.ktb.chatapp.service.SessionCreationResult;
-import com.ktb.chatapp.service.SessionMetadata;
-import com.ktb.chatapp.service.SessionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -15,11 +12,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -37,18 +31,9 @@ public class AuthControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private SessionService sessionService;
-
     @Test
     @WithAnonymousUser
     public void testRegisterUser() throws Exception {
-        when(sessionService.createSession(any(String.class), any(SessionMetadata.class)))
-                .thenReturn(SessionCreationResult.builder()
-                        .sessionId("mock-session-id")
-                        .expiresIn(3600L)
-                        .build());
-
         String email = "test" + System.currentTimeMillis() + "@example.com";
         RegisterRequest registerRequest = new RegisterRequest();
         registerRequest.setName("Test User");
@@ -69,12 +54,6 @@ public class AuthControllerTest {
     @Test
     @WithAnonymousUser
     public void testAuthenticateUser() throws Exception {
-        when(sessionService.createSession(any(String.class), any(SessionMetadata.class)))
-                .thenReturn(SessionCreationResult.builder()
-                        .sessionId("mock-session-id")
-                        .expiresIn(3600L)
-                        .build());
-
         String email = "test" + System.currentTimeMillis() + "@example.com";
 
         RegisterRequest registerRequest = new RegisterRequest();

@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback(async () => {
     try {
       // authService를 통해 로그아웃 API 호출
-      await authService.logout(user?.token, user?.sessionId);
+      await authService.logout(user?.token);
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
@@ -170,17 +170,12 @@ export const AuthProvider = ({ children }) => {
     async (updates) => {
       if (!user) return;
 
-      const updatedUserData = await authService.updateProfile(
-        updates,
-        user.token,
-        user.sessionId
-      );
+      const updatedUserData = await authService.updateProfile(updates, user.token);
 
       const updatedUser = {
         ...user,
         ...updatedUserData,
         token: user.token,
-        sessionId: user.sessionId,
         lastActivity: Date.now()
       };
 
@@ -212,7 +207,7 @@ export const AuthProvider = ({ children }) => {
   // 토큰 검증
   const verifyToken = useCallback(async () => {
     try {
-      if (!user?.token || !user?.sessionId) {
+      if (!user?.token) {
         throw new Error("No authentication data found");
       }
 
@@ -231,8 +226,7 @@ export const AuthProvider = ({ children }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-auth-token": user.token,
-          "x-session-id": user.sessionId
+          "x-auth-token": user.token
         },
         credentials: "include"
       });
@@ -272,8 +266,7 @@ export const AuthProvider = ({ children }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-auth-token": user.token,
-          "x-session-id": user.sessionId
+          "x-auth-token": user.token
         },
         credentials: "include"
       });

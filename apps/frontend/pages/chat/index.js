@@ -481,8 +481,7 @@ function ChatRoomsComponent() {
         const socket = await socketService
           .connect({
             auth: {
-              token: currentUser.token,
-              sessionId: currentUser.sessionId
+              token: currentUser.token
             }
           })
           .catch((err) => {
