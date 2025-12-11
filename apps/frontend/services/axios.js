@@ -93,9 +93,6 @@ axiosInstance.interceptors.request.use(
       const user = JSON.parse(userStr);
       if (user?.token) {
         config.headers["x-auth-token"] = user.token;
-        if (user.sessionId) {
-          config.headers["x-session-id"] = user.sessionId;
-        }
       }
     }
 

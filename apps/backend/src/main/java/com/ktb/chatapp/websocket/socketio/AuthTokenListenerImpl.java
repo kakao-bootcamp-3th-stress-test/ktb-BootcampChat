@@ -6,8 +6,6 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.JwtService;
-import com.ktb.chatapp.service.SessionService;
-import com.ktb.chatapp.service.SessionValidationResult;
 import com.ktb.chatapp.websocket.socketio.handler.ConnectionLoginHandler;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +17,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Socket.IO Authorization Handler
- * socket.handshake.auth.token과 sessionId를 처리한다.
+ * socket.handshake.auth.token 값을 검증한다.
  */
 @Slf4j
 @Component
@@ -28,7 +26,6 @@ import org.springframework.stereotype.Component;
 public class AuthTokenListenerImpl implements AuthTokenListener {
 
     private final JwtService jwtService;
-    private final SessionService sessionService;
     private final UserRepository userRepository;
     private final ObjectProvider<ConnectionLoginHandler> socketIOChatHandlerProvider;
 
@@ -37,12 +34,9 @@ public class AuthTokenListenerImpl implements AuthTokenListener {
         try {
             var authToken = (Map<?, ?>) _authToken;
             String token = authToken.get("token") != null ? authToken.get("token").toString() : null;
-            String sessionId = authToken.get("sessionId") != null ? authToken.get("sessionId").toString() : null;
-
-            if (token == null || sessionId == null) {
-                log.warn("Missing authentication credentials in Socket.IO handshake - token: {}, sessionId: {}",
-                        token != null, sessionId != null);
-                return new AuthTokenResult(false, "Authentication error");
+            if (token == null) {
+                log.warn("Missing authentication token in Socket.IO handshake");
+                return new AuthTokenResult(false, "Authentication required");
             }
 
             String userId;
@@ -50,15 +44,6 @@ public class AuthTokenListenerImpl implements AuthTokenListener {
                 userId = jwtService.extractUserId(token);
             } catch (JwtException e) {
                 return new AuthTokenResult(false, Map.of("message", "Invalid token"));
-            }
-
-            // Validate session using SessionService
-            SessionValidationResult validationResult =
-                    sessionService.validateSession(userId, sessionId);
-
-            if (!validationResult.isValid()) {
-                log.error("Session validation failed: {}", validationResult.getMessage());
-                return new AuthTokenResult(false, Map.of("message", "Invalid session"));
             }
 
             // Load user from database
@@ -70,7 +55,7 @@ public class AuthTokenListenerImpl implements AuthTokenListener {
 
             log.info("Socket.IO connection authorized for user: {} ({})", user.getName(), userId);
             
-            var socketUser = new SocketUser(user.getId(), user.getName(), sessionId, client.getSessionId().toString());
+            var socketUser = new SocketUser(user.getId(), user.getName(), client.getSessionId().toString());
             socketIOChatHandlerProvider.getObject().onConnect(client, socketUser);
             return AuthTokenResult.AuthTokenResultSuccess;
         } catch (Exception e) {

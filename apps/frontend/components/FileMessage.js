@@ -30,14 +30,14 @@ const FileMessage = ({
   const messageDomRef = useRef(null);
   useEffect(() => {
     if (msg?.file) {
-      const url = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
+      const url = fileService.getPreviewUrl(msg.file, user?.token, true);
       setPreviewUrl(url);
       console.debug("Preview URL generated:", {
         filename: msg.file.filename,
         url
       });
     }
-  }, [msg?.file, user?.token, user?.sessionId]);
+  }, [msg?.file, user?.token]);
 
   if (!msg?.file) {
     console.error("File data is missing:", msg);
@@ -108,16 +108,18 @@ const FileMessage = ({
         throw new Error("파일 정보가 없습니다.");
       }
 
-      if (!user?.token || !user?.sessionId) {
+      if (!user?.token) {
         throw new Error("인증 정보가 없습니다.");
       }
 
       const baseUrl = fileService.getFileUrl(msg.file.filename, false);
-      const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}&download=true`;
+      const authenticatedUrl = new URL(baseUrl);
+      authenticatedUrl.searchParams.set("token", user.token);
+      authenticatedUrl.searchParams.set("download", "true");
 
       const iframe = document.createElement("iframe");
       iframe.style.display = "none";
-      iframe.src = authenticatedUrl;
+      iframe.src = authenticatedUrl.toString();
       document.body.appendChild(iframe);
 
       setTimeout(() => {
@@ -139,14 +141,15 @@ const FileMessage = ({
         throw new Error("파일 정보가 없습니다.");
       }
 
-      if (!user?.token || !user?.sessionId) {
+      if (!user?.token) {
         throw new Error("인증 정보가 없습니다.");
       }
 
       const baseUrl = fileService.getFileUrl(msg.file.filename, true);
-      const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}`;
+      const authenticatedUrl = new URL(baseUrl);
+      authenticatedUrl.searchParams.set("token", user.token);
 
-      const newWindow = window.open(authenticatedUrl, "_blank");
+      const newWindow = window.open(authenticatedUrl.toString(), "_blank");
       if (!newWindow) {
         throw new Error("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
       }
@@ -167,16 +170,11 @@ const FileMessage = ({
         );
       }
 
-      if (!user?.token || !user?.sessionId) {
+      if (!user?.token) {
         throw new Error("인증 정보가 없습니다.");
       }
 
-      const previewUrl = fileService.getPreviewUrl(
-        msg.file,
-        user?.token,
-        user?.sessionId,
-        true
-      );
+      const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, true);
 
       return (
         <div className="bg-transparent-pattern">

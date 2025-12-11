@@ -41,6 +41,8 @@ NEXT_PUBLIC_SOCKET_URL=http://localhost:5002
 - `NEXT_PUBLIC_API_URL`: 백엔드 REST API 서버 주소
 - `NEXT_PUBLIC_SOCKET_URL`: Socket.IO 서버 주소
 
+> 🔐 **인증**: 백엔드는 JWT 토큰만을 사용합니다. 로그인/회원가입 응답에는 더 이상 `sessionId`가 포함되지 않으며, 모든 API 및 Socket.IO 요청은 `Authorization` 또는 `x-auth-token` 헤더만 설정하면 됩니다.
+
 서버환경에서 실행시 Route 53 에 등록한 도메인을 입력하세요. 예: `https://chat.goorm-ktb-[번호].goorm.team`
 
 ### 3. 개발 서버 실행
