@@ -14,6 +14,9 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.service.cache.RoomListCache;
+import com.ktb.chatapp.service.cache.RoomListCache.CachedRoomsPage;
+import com.ktb.chatapp.service.cache.RoomListCache.RoomListCacheKey;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -48,6 +51,7 @@ public class RoomService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
     private final MongoTemplate mongoTemplate;
+    private final RoomListCache roomListCache;
 
     public RoomsResponse getAllRoomsWithPagination(
             com.ktb.chatapp.dto.PageRequest pageRequest, String name) {
@@ -67,6 +71,19 @@ public class RoomService {
                 : Sort.Direction.ASC;
 
             String sortField = pageRequest.getSortField();
+
+            RoomListCacheKey cacheKey = new RoomListCacheKey(
+                pageRequest.getPage(),
+                pageRequest.getPageSize(),
+                pageRequest.getSortField(),
+                pageRequest.getSortOrder(),
+                pageRequest.getSearch()
+            ).normalize();
+
+            CachedRoomsPage cached = roomListCache.get(cacheKey);
+            if (cached != null) {
+                return buildResponseFromCache(cached, name);
+            }
 
             // Pageable 객체 생성
             PageRequest springPageRequest = PageRequest.of(
@@ -89,8 +106,8 @@ public class RoomService {
             Map<String, Long> recentCounts = loadRecentMessageCountsByIds(
                 roomSummaries.stream().map(RoomSummary::id).toList());
 
-            List<RoomResponse> roomResponses = roomSummaries.stream()
-                .map(summary -> mapToRoomResponse(summary, name, usersById, recentCounts))
+            List<RoomResponse> baseRoomResponses = roomSummaries.stream()
+                .map(summary -> mapToRoomResponse(summary, null, usersById, recentCounts))
                 .toList();
 
             // 메타데이터 생성
@@ -100,16 +117,18 @@ public class RoomService {
                 .pageSize(pageRequest.getPageSize())
                 .totalPages(calculateTotalPages(total, pageRequest.getPageSize()))
                 .hasMore(hasMorePages(total, pageRequest.getPage(), pageRequest.getPageSize()))
-                .currentCount(roomResponses.size())
+                .currentCount(baseRoomResponses.size())
                 .sort(PageMetadata.SortInfo.builder()
                     .field(pageRequest.getSortField())
                     .order(pageRequest.getSortOrder())
                     .build())
                 .build();
 
+            roomListCache.put(cacheKey, baseRoomResponses, metadata);
+
             return RoomsResponse.builder()
                 .success(true)
-                .data(roomResponses)
+                .data(applyRequesterIdentity(baseRoomResponses, name))
                 .metadata(metadata)
                 .build();
 
@@ -194,6 +213,7 @@ public class RoomService {
             log.error("roomCreated 이벤트 발행 실패", e);
         }
         
+        roomListCache.invalidateAll();
         return savedRoom;
     }
 
@@ -235,6 +255,7 @@ public class RoomService {
             log.error("roomUpdate 이벤트 발행 실패", e);
         }
 
+        roomListCache.invalidateAll();
         return room;
     }
 
@@ -455,5 +476,32 @@ public class RoomService {
         }
         long shown = (long) (page + 1) * pageSize;
         return shown < total;
+    }
+
+    private RoomsResponse buildResponseFromCache(CachedRoomsPage cached, String requesterIdentity) {
+        List<RoomResponse> responses = applyRequesterIdentity(cached.rooms(), requesterIdentity);
+        return RoomsResponse.builder()
+            .success(true)
+            .data(responses)
+            .metadata(cached.metadata())
+            .build();
+    }
+
+    private List<RoomResponse> applyRequesterIdentity(List<RoomResponse> baseResponses, String requesterIdentity) {
+        if (requesterIdentity == null || requesterIdentity.isBlank()) {
+            return baseResponses;
+        }
+        return baseResponses.stream()
+            .map(response -> response.toBuilder()
+                .isCreator(isCreatorForRequester(response, requesterIdentity))
+                .build())
+            .toList();
+    }
+
+    private boolean isCreatorForRequester(RoomResponse response, String requesterIdentity) {
+        if (response.getCreator() == null || response.getCreator().getEmail() == null) {
+            return false;
+        }
+        return response.getCreator().getEmail().equalsIgnoreCase(requesterIdentity);
     }
 }
