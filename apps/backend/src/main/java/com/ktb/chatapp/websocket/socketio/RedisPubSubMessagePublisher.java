@@ -31,7 +31,7 @@ public class RedisPubSubMessagePublisher implements ChatMessagePublisher {
     public static final String CHAT_MESSAGES_CHANNEL = "chat:messages";
 
     private final RedissonClient pubSubRedissonClient;
-    private final ObjectMapper pubSubObjectMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void publish(MessageResponse messageResponse) {
@@ -40,7 +40,7 @@ public class RedisPubSubMessagePublisher implements ChatMessagePublisher {
             return;
         }
         try {
-            String payload = pubSubObjectMapper.writeValueAsString(messageResponse);
+            String payload = objectMapper.writeValueAsString(messageResponse);
             RTopic topic = pubSubRedissonClient.getTopic(CHAT_MESSAGES_CHANNEL);
             long receivers = topic.publish(payload);
             log.debug("Published chat message to Redis pub/sub. roomId={}, receivers={}",

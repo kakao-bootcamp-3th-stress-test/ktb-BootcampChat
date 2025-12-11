@@ -1,6 +1,5 @@
 package com.ktb.chatapp.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -44,13 +43,6 @@ public class PubSubRedisConfig {
         serverConfig.setClientName(properties.getClientName());
 
         return Redisson.create(config);
-    }
-
-    @Bean
-    @ConditionalOnProperty(name = "app.pubsub-redis.enabled", havingValue = "true")
-    public ObjectMapper pubSubObjectMapper(ObjectMapper objectMapper) {
-        // 메인 ObjectMapper 설정을 그대로 재사용 (커스텀 모듈 포함)
-        return objectMapper;
     }
 
     private String buildAddress(PubSubRedisProperties properties) {

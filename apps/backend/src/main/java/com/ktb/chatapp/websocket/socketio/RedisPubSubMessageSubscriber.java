@@ -27,7 +27,7 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.MESSAGE;
 public class RedisPubSubMessageSubscriber {
 
     private final RedissonClient pubSubRedissonClient;
-    private final ObjectMapper pubSubObjectMapper;
+    private final ObjectMapper objectMapper;
     private final SocketIOServer socketIOServer;
 
     @PostConstruct
@@ -36,7 +36,7 @@ public class RedisPubSubMessageSubscriber {
         topic.addListener(String.class, (channel, payload) -> {
             try {
                 MessageResponse messageResponse =
-                        pubSubObjectMapper.readValue(payload, MessageResponse.class);
+                        objectMapper.readValue(payload, MessageResponse.class);
                 if (messageResponse.getRoomId() == null) {
                     log.warn("Received pub/sub message without roomId, skipping: {}", messageResponse);
                     return;
