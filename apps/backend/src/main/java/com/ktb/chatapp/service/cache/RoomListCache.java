@@ -1,6 +1,6 @@
 package com.ktb.chatapp.service.cache;
 
-import com.ktb.chatapp.dto.rooms.PageMetadata;
+import com.ktb.chatapp.dto.PageMetadata;
 import com.ktb.chatapp.dto.rooms.RoomResponse;
 import java.time.Clock;
 import java.util.List;

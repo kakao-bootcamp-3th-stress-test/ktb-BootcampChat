@@ -205,9 +205,9 @@ public class RoomService {
         
         // Publish event for room created
         try {
-            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom), true);
+            Map<String, User> usersById = loadUsersForRooms(List.of(savedRoom), false);
             Map<String, Long> recentCounts = loadRecentMessageCounts(List.of(savedRoom));
-            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts, true);
+            RoomResponse roomResponse = mapToRoomResponse(savedRoom, name, usersById, recentCounts, false);
             eventPublisher.publishEvent(new RoomCreatedEvent(this, roomResponse));
         } catch (Exception e) {
             log.error("roomCreated 이벤트 발행 실패", e);
