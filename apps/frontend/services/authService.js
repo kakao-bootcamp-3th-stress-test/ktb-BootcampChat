@@ -2,6 +2,19 @@ import axios from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// 전역 캐시 제거: SSR 환경에서 메모리 누수 방지
+// 매 요청마다 localStorage에서 직접 읽어옴
+const getCachedUser = () => {
+  try {
+    if (typeof window === "undefined") {
+      return {};
+    }
+    return JSON.parse(localStorage.getItem("user") || "{}");
+  } catch (error) {
+    return {};
+  }
+};
+
 // axios 인스턴스 생성
 const api = axios.create({
   baseURL: API_URL,
@@ -91,8 +104,8 @@ api.interceptors.request.use(
       }
     }
 
-    // 인증 토큰 설정
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    // 인증 토큰 설정 (캐싱된 사용자 정보 사용)
+    const user = getCachedUser();
     if (user?.token) {
       config.headers["x-auth-token"] = user.token;
     }
@@ -294,35 +307,11 @@ class AuthService {
   }
 
   async checkServerConnection() {
-    try {
-      // 클라이언트에서만 실행되도록 확인
-      if (typeof window === "undefined") {
-        return false;
-      }
-
-      // API_URL이 없으면 연결 실패로 처리
-      if (!API_URL) {
-        throw new Error("API URL이 설정되지 않았습니다.");
-      }
-
-      const response = await api.get("/api/health", {
-        timeout: 3000, // 타임아웃을 3초로 단축
-        validateStatus: (status) => status < 500 // 5xx 에러만 실제 에러로 처리
-      });
-
-      return response.data?.status === "ok" || response.status === 200;
-    } catch (error) {
-      // 네트워크 에러나 타임아웃은 더 구체적인 메시지 제공
-      if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
-        throw new Error("서버 응답 시간이 초과되었습니다.");
-      }
-
-      if (error.code === "ERR_NETWORK" || error.message.includes("Network Error")) {
-        throw new Error("네트워크 연결을 확인해주세요.");
-      }
-
-      throw this._handleError(error);
+    // 헬스 체크 제거: 항상 연결된 것으로 간주하고 실제 API 호출에서 에러 핸들링
+    if (typeof window === "undefined") {
+      return false;
     }
+    return true;
   }
 
   _handleError(error) {

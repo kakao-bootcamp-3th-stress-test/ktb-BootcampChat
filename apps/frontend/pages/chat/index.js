@@ -153,7 +153,7 @@ function ChatRoomsComponent() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState(CONNECTION_STATUS.CHECKING);
+  const [connectionStatus, setConnectionStatus] = useState(CONNECTION_STATUS.CONNECTED);
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const [sorting, setSorting] = useState([{ id: "createdAt", desc: true }]);
@@ -166,10 +166,10 @@ function ChatRoomsComponent() {
   // Refs
   const socketRef = useRef(null);
   const tableContainerRef = useRef(null);
-  const connectionCheckTimerRef = useRef(null);
   const isLoadingRef = useRef(false);
   const previousRoomsRef = useRef([]);
   const lastLoadedPageRef = useRef(0);
+  const fetchRoomsRef = useRef(null);
 
   const getRetryDelay = useCallback((retryCount) => {
     const delay =
@@ -233,7 +233,9 @@ function ChatRoomsComponent() {
           setRetryCount((prev) => prev + 1);
           setTimeout(() => {
             setIsRetrying(true);
-            fetchRooms(isLoadingMore);
+            if (fetchRoomsRef.current) {
+              fetchRoomsRef.current(isLoadingMore);
+            }
           }, delay);
         }
       }
@@ -252,50 +254,8 @@ function ChatRoomsComponent() {
     [isRetrying, retryCount, getRetryDelay]
   );
 
-  const attemptConnection = useCallback(
-    async (retryAttempt = 0) => {
-      try {
-        setConnectionStatus(CONNECTION_STATUS.CONNECTING);
-
-        const response = await axiosInstance.get("/api/health", {
-          timeout: 5000,
-          retries: 1
-        });
-
-        // 401 응답은 인증 만료를 의미
-        if (response?.status === 401) {
-          setConnectionStatus(CONNECTION_STATUS.ERROR);
-          throw new Error("AUTH_EXPIRED");
-        }
-
-        const isConnected = response?.data?.status === "ok" && response?.status === 200;
-
-        if (isConnected) {
-          setConnectionStatus(CONNECTION_STATUS.CONNECTED);
-          setRetryCount(0);
-          return true;
-        }
-
-        throw new Error("Server not ready");
-      } catch (error) {
-        // 401 에러는 인증 만료 - 재시도 없이 즉시 실패
-        if (error.response?.status === 401 || error.message === "AUTH_EXPIRED") {
-          setConnectionStatus(CONNECTION_STATUS.ERROR);
-          throw new Error("AUTH_EXPIRED");
-        }
-
-        if (!error.response && retryAttempt < RETRY_CONFIG.maxRetries) {
-          const delay = getRetryDelay(retryAttempt);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          return attemptConnection(retryAttempt + 1);
-        }
-
-        setConnectionStatus(CONNECTION_STATUS.ERROR);
-        throw new Error("SERVER_UNREACHABLE");
-      }
-    },
-    [getRetryDelay]
-  );
+  // 연결 상태는 실제 API 호출 성공/실패로 판단
+  // 헬스 체크는 제거하고 기본적으로 연결된 것으로 간주
 
   const fetchRooms = useCallback(
     async (isLoadingMore = false) => {
@@ -313,8 +273,7 @@ function ChatRoomsComponent() {
           setLoadingMore(true);
         }
 
-        await attemptConnection();
-
+        // 연결 상태를 기본적으로 CONNECTED로 간주하고 실제 API 호출
         const response = await axiosInstance.get("/api/rooms", {
           params: {
             page: isLoadingMore ? pageIndex : 0,
@@ -341,6 +300,12 @@ function ChatRoomsComponent() {
 
         setHasMore(data.length === pageSize && metadata.hasMore);
 
+        // API 호출 성공 시 연결 상태를 CONNECTED로 설정
+        if (connectionStatus !== CONNECTION_STATUS.CONNECTED) {
+          setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+        }
+        setRetryCount(0);
+
         if (isInitialLoad) {
           setIsInitialLoad(false);
         }
@@ -354,16 +319,11 @@ function ChatRoomsComponent() {
         isLoadingRef.current = false;
       }
     },
-    [
-      currentUser,
-      pageIndex,
-      pageSize,
-      sorting,
-      isInitialLoad,
-      attemptConnection,
-      handleFetchError
-    ]
+    [currentUser, pageIndex, pageSize, sorting, isInitialLoad, connectionStatus]
   );
+
+  // fetchRooms ref를 항상 최신 상태로 유지
+  fetchRoomsRef.current = fetchRooms;
 
   const handleLoadMore = useCallback(async () => {
     if (loadingMore || !hasMore || isLoadingRef.current) {
@@ -396,6 +356,12 @@ function ChatRoomsComponent() {
         });
 
         setHasMore(newRooms.length === pageSize && metadata.hasMore);
+
+        // API 호출 성공 시 연결 상태를 CONNECTED로 설정
+        if (connectionStatus !== CONNECTION_STATUS.CONNECTED) {
+          setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+        }
+        setRetryCount(0);
       }
     } catch (error) {
       handleFetchError(error, true);
@@ -404,51 +370,54 @@ function ChatRoomsComponent() {
       isLoadingRef.current = false;
       Toast.info("추가 채팅방을 불러왔습니다.");
     }
-  }, [loadingMore, hasMore, rooms.length, pageSize, sorting, handleFetchError]);
+  }, [
+    loadingMore,
+    hasMore,
+    rooms.length,
+    pageSize,
+    sorting,
+    connectionStatus,
+    handleFetchError
+  ]);
 
   // 페이지 인덱스 변경 시 데이터 로드
   useEffect(() => {
-    if (pageIndex > 0) {
-      fetchRooms(true);
-    }
-  }, [pageIndex, fetchRooms]);
+    if (!currentUser?.token) return;
 
-  useEffect(() => {
-    if (!currentUser) return;
+    let isMounted = true;
 
     const initFetch = async () => {
       try {
-        await fetchRooms(false);
+        if (fetchRoomsRef.current) {
+          await fetchRoomsRef.current(false);
+        }
       } catch (error) {
-        setTimeout(() => {
-          if (connectionStatus === CONNECTION_STATUS.CHECKING) {
-            fetchRooms(false);
-          }
-        }, 3000);
+        if (isMounted && fetchRoomsRef.current) {
+          setTimeout(() => {
+            if (connectionStatus === CONNECTION_STATUS.CHECKING) {
+              fetchRoomsRef.current(false);
+            }
+          }, 3000);
+        }
       }
     };
 
     initFetch();
 
-    connectionCheckTimerRef.current = setInterval(() => {
-      if (connectionStatus === CONNECTION_STATUS.CHECKING) {
-        attemptConnection();
-      }
-    }, 5000);
-
     return () => {
-      if (connectionCheckTimerRef.current) {
-        clearInterval(connectionCheckTimerRef.current);
-      }
+      isMounted = false;
     };
-  }, [currentUser, connectionStatus, attemptConnection, fetchRooms]);
+  }, [currentUser?.token, connectionStatus]);
 
+  // 네트워크 상태 모니터링
   useEffect(() => {
     const handleOnline = () => {
       setConnectionStatus(CONNECTION_STATUS.CONNECTING);
       lastLoadedPageRef.current = 0;
       setPageIndex(0);
-      fetchRooms(false);
+      if (fetchRoomsRef.current) {
+        fetchRoomsRef.current(false);
+      }
     };
 
     const handleOffline = () => {
@@ -469,12 +438,13 @@ function ChatRoomsComponent() {
         window.removeEventListener("offline", handleOffline);
       };
     }
-  }, [fetchRooms]);
+  }, []);
 
   useEffect(() => {
     if (!currentUser?.token) return;
 
     let isSubscribed = true;
+    let handlers = null;
 
     const connectSocket = async () => {
       try {
@@ -493,15 +463,16 @@ function ChatRoomsComponent() {
 
         socketRef.current = socket;
 
-        const handlers = {
+        // 메모리 누수 방지: 핸들러를 cleanup에서 사용할 수 있도록 저장
+        handlers = {
           connect: () => {
             setConnectionStatus(CONNECTION_STATUS.CONNECTED);
             socket.emit("joinRoomList");
           },
-          disconnect: (reason) => {
+          disconnect: () => {
             setConnectionStatus(CONNECTION_STATUS.DISCONNECTED);
           },
-          error: (error) => {
+          error: () => {
             setConnectionStatus(CONNECTION_STATUS.ERROR);
           },
           roomCreated: (newRoom) => {
@@ -550,10 +521,21 @@ function ChatRoomsComponent() {
 
     return () => {
       isSubscribed = false;
+
+      // 메모리 누수 방지: 모든 이벤트 리스너 제거
+      if (socketRef.current && handlers) {
+        Object.keys(handlers).forEach((event) => {
+          socketRef.current.off(event);
+        });
+      }
+
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+
+      // ref 정리
+      handlers = null;
     };
   }, [currentUser]);
 
@@ -712,7 +694,9 @@ function ChatRoomsComponent() {
                   onClick={() => {
                     lastLoadedPageRef.current = 0;
                     setPageIndex(0);
-                    fetchRooms(false);
+                    if (fetchRoomsRef.current) {
+                      fetchRoomsRef.current(false);
+                    }
                   }}
                   disabled={isRetrying}
                 >
@@ -752,7 +736,9 @@ function ChatRoomsComponent() {
                     onClick={() => {
                       lastLoadedPageRef.current = 0;
                       setPageIndex(0);
-                      fetchRooms(false);
+                      if (fetchRoomsRef.current) {
+                        fetchRoomsRef.current(false);
+                      }
                     }}
                   >
                     다시 시도
