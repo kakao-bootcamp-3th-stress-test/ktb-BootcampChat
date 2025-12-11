@@ -12,12 +12,14 @@ import com.ktb.chatapp.model.User;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
+import com.ktb.chatapp.websocket.socketio.RoomParticipantCache;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +46,7 @@ public class RoomLeaveHandler {
     private final UserRooms userRooms;
     private final MessageResponseMapper messageResponseMapper;
     private final SocketConnectionTracker connectionTracker;
+    private final RoomParticipantCache participantCache;
     
     @OnEvent(LEAVE_ROOM)
     public void handleLeaveRoom(SocketIOClient client, String roomId) {
@@ -74,6 +77,7 @@ public class RoomLeaveHandler {
             
             client.leaveRoom(roomId);
             userRooms.remove(userId, roomId);
+            participantCache.removeParticipant(roomId, userId);
             
             log.info("User {} left room {}", userName, room.getName());
             
@@ -118,19 +122,7 @@ public class RoomLeaveHandler {
     }
     
     private void broadcastParticipantList(String roomId) {
-        Optional<Room> roomOpt = roomRepository.findById(roomId);
-        if (roomOpt.isEmpty()) {
-            return;
-        }
-        
-        var participantList = roomOpt.get()
-                .getParticipantIds()
-                .stream()
-                .map(userRepository::findById)
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(UserResponse::from)
-                .toList();
+        var participantList = participantCache.getParticipants(roomId, () -> loadParticipantsFromDb(roomId));
         
         if (participantList.isEmpty()) {
             return;
@@ -152,5 +144,21 @@ public class RoomLeaveHandler {
     private String getUserName(SocketIOClient client) {
         SocketUser user = getUserDto(client);
         return user != null ? user.name() : null;
+    }
+
+    private List<UserResponse> loadParticipantsFromDb(String roomId) {
+        Optional<Room> roomOpt = roomRepository.findById(roomId);
+        if (roomOpt.isEmpty()) {
+            participantCache.evict(roomId);
+            return List.of();
+        }
+        List<String> participantIds = roomOpt.get().getParticipantIds();
+        if (participantIds == null || participantIds.isEmpty()) {
+            participantCache.evict(roomId);
+            return List.of();
+        }
+        return userRepository.findAllById(participantIds).stream()
+                .map(UserResponse::from)
+                .toList();
     }
 }

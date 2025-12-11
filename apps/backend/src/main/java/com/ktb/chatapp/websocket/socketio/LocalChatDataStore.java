@@ -2,11 +2,15 @@ package com.ktb.chatapp.websocket.socketio;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 
 /**
  * Local in-memory implementation of ChatDataStore using ConcurrentHashMap.
  * Thread-safe storage for chat-related data without external dependencies.
  */
+@Component
+@ConditionalOnProperty(name = "socketio.store", havingValue = "local")
 public class LocalChatDataStore implements ChatDataStore {
     
     private final ConcurrentHashMap<String, Object> storage = new ConcurrentHashMap<>();
