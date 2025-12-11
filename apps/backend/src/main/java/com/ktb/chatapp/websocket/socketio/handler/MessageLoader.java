@@ -59,7 +59,7 @@ public class MessageLoader {
         Pageable pageable = PageRequest.of(0, limit, Sort.by("timestamp").descending());
 
         Page<Message> messagePage = messageRepository
-                .findByRoomIdAndIsDeletedAndTimestampBefore(roomId, false, before, pageable);
+                .findSlimMessagesBefore(roomId, false, before, pageable);
 
         List<Message> messages = messagePage.getContent();
 
