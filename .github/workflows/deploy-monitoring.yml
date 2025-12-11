@@ -27,6 +27,108 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
+      - name: Generate Prometheus targets dynamically
+        run: |
+          mkdir -p apps/backend/monitoring/prometheus/targets
+
+          # Backend 서버들 (Role=backend)
+          BACKEND_IPS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text | tr '\t' '\n' | grep -v '^$')
+
+          # Frontend 서버들 (Role=frontend)
+          FRONTEND_IPS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=frontend" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text | tr '\t' '\n' | grep -v '^$')
+
+          # MongoDB (Role=mongodb)
+          MONGODB_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=mongodb" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text | tr -d '\t\n')
+
+          # Redis (Role=redis)
+          REDIS_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=redis" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text | tr -d '\t\n')
+
+          # spring-boot.prod.yml (Backend - Actuator metrics)
+          echo "# Auto-generated - Backend servers" > apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
+          for ip in $BACKEND_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml << EOF
+          - targets: ['${ip}:5001']
+            labels:
+              application: 'ktb-chat-backend'
+              environment: 'production'
+          EOF
+          done
+
+          # nextjs.prod.yml (Frontend - Next.js metrics)
+          echo "# Auto-generated - Frontend servers" > apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
+          for ip in $FRONTEND_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml << EOF
+          - targets: ['${ip}:3000']
+            labels:
+              application: 'ktb-chat-frontend'
+              environment: 'production'
+          EOF
+          done
+
+          # mongodb.prod.yml
+          cat > apps/backend/monitoring/prometheus/targets/mongodb.prod.yml << EOF
+          # Auto-generated - MongoDB server
+          - targets: ['${MONGODB_IP}:9216']
+            labels:
+              environment: 'production'
+              service: 'mongodb'
+          EOF
+
+          # redis.prod.yml
+          cat > apps/backend/monitoring/prometheus/targets/redis.prod.yml << EOF
+          # Auto-generated - Redis server
+          - targets: ['${REDIS_IP}:9121']
+            labels:
+              environment: 'production'
+              service: 'redis'
+          EOF
+
+          # node-exporters.prod.yml (모든 서버의 Node Exporter)
+          echo "# Auto-generated - Node Exporters" > apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+          for ip in $BACKEND_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${ip}:9100']
+            labels:
+              environment: 'production'
+              cluster: 'backend'
+          EOF
+          done
+          for ip in $FRONTEND_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${ip}:9100']
+            labels:
+              environment: 'production'
+              cluster: 'frontend'
+          EOF
+          done
+          cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${MONGODB_IP}:9100']
+            labels:
+              environment: 'production'
+              cluster: 'database'
+              service: 'mongodb'
+          - targets: ['${REDIS_IP}:9100']
+            labels:
+              environment: 'production'
+              cluster: 'database'
+              service: 'redis'
+          EOF
+
+          echo "Generated target files:"
+          ls -la apps/backend/monitoring/prometheus/targets/
+
       - name: Get Observer Server IP and Deploy
         run: |
           # Get server IP
@@ -34,23 +136,23 @@ jobs:
             --filters "Name=tag:Role,Values=observer" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --output text)
-          
+
           # Setup SSH
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
-          
+
           # Create remote directories
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/monitoring/prometheus/targets /home/ubuntu/monitoring/grafana/provisioning/datasources /home/ubuntu/monitoring/grafana/provisioning/dashboards"
-          
+
           # Copy monitoring configuration files
           scp -i ~/.ssh/id_rsa -r apps/backend/monitoring/* ubuntu@$SERVER:/home/ubuntu/monitoring/
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.o11y.yaml ubuntu@$SERVER:/home/ubuntu/
-          
+
           # Deploy monitoring stack
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && export ENVIRONMENT=prod && export GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin} && export GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin} && sudo -E docker compose -f docker-compose.o11y.yaml pull && sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate"
-          
+
           # Verify deployment
           sleep 10
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=prometheus-ktb' --filter 'name=grafana-ktb' --filter 'name=cadvisor' --format 'table {{.Names}}\t{{.Status}}'"

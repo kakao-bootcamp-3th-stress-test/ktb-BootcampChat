@@ -58,13 +58,43 @@ public class FileController {
     })
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(
-            @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "업로드할 파일 (백엔드 업로드 시 필요)") @RequestParam(value = "file", required = false) MultipartFile file,
+            @Parameter(description = "S3 키 (프론트엔드에서 직접 업로드한 경우)") @RequestParam(value = "s3Key", required = false) String s3Key,
+            @Parameter(description = "S3 URL (프론트엔드에서 직접 업로드한 경우)") @RequestParam(value = "s3Url", required = false) String s3Url,
+            @Parameter(description = "파일명 (프론트엔드에서 직접 업로드한 경우)") @RequestParam(value = "filename", required = false) String filename,
+            @Parameter(description = "원본 파일명 (프론트엔드에서 직접 업로드한 경우)") @RequestParam(value = "originalFilename", required = false) String originalFilename,
+            @Parameter(description = "컨텐츠 타입 (프론트엔드에서 직접 업로드한 경우)") @RequestParam(value = "contentType", required = false) String contentType,
+            @Parameter(description = "파일 크기 (프론트엔드에서 직접 업로드한 경우)") @RequestParam(value = "fileSize", required = false) Long fileSize,
             Principal principal) {
         try {
             User user = userRepository.findByEmail(principal.getName())
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + principal.getName()));
 
-            FileUploadResult result = fileService.uploadFile(file, user.getId());
+            FileUploadResult result;
+            
+            // 프론트엔드에서 이미 S3에 업로드한 경우 메타데이터만 저장 (파일 없이)
+            if (s3Key != null && !s3Key.isEmpty() && s3Url != null && !s3Url.isEmpty()) {
+                log.info("프론트엔드에서 직접 업로드된 파일 메타데이터 저장 - s3Key: {}, filename: {}", s3Key, filename);
+                // 프론트엔드에서 이미 검증 완료했으므로 파일 없이 메타데이터만 저장
+                result = fileService.saveFileMetadataFromS3(
+                    filename != null ? filename : extractFilenameFromS3Key(s3Key),
+                    originalFilename != null ? originalFilename : filename,
+                    contentType,
+                    fileSize != null ? fileSize : 0L,
+                    s3Key,
+                    user.getId()
+                );
+            } else {
+                // 기존 로직: 백엔드에서 파일 업로드 (하위 호환성)
+                if (file == null || file.isEmpty()) {
+                    Map<String, Object> errorResponse = new HashMap<>();
+                    errorResponse.put("success", false);
+                    errorResponse.put("message", "파일이 제공되지 않았습니다.");
+                    return ResponseEntity.badRequest().body(errorResponse);
+                }
+                log.info("백엔드에서 파일 업로드 처리");
+                result = fileService.uploadFile(file, user.getId());
+            }
 
             if (result.isSuccess()) {
                 Map<String, Object> response = new HashMap<>();
@@ -97,6 +127,19 @@ public class FileController {
             errorResponse.put("error", e.getMessage());
             return ResponseEntity.status(500).body(errorResponse);
         }
+    }
+
+    /**
+     * S3 키에서 파일명 추출
+     */
+    private String extractFilenameFromS3Key(String s3Key) {
+        if (s3Key == null || s3Key.isEmpty()) {
+            return "file";
+        }
+        int lastSlash = s3Key.lastIndexOf('/');
+        return lastSlash >= 0 && lastSlash < s3Key.length() - 1 
+            ? s3Key.substring(lastSlash + 1) 
+            : s3Key;
     }
 
     /**

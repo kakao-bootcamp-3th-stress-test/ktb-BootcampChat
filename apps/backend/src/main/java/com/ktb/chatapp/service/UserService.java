@@ -114,6 +114,54 @@ public class UserService {
     }
 
     /**
+     * 프론트엔드에서 직접 S3에 업로드한 프로필 이미지의 메타데이터 저장
+     * 프론트엔드에서 이미 검증 완료했으므로 파일 없이 메타데이터만 저장 (속도 최적화)
+     * @param email 사용자 이메일
+     * @param s3Key S3 키
+     * @param s3Url S3 URL (CloudFront URL)
+     */
+    public ProfileImageResponse saveProfileImageMetadata(String email, String s3Key, String s3Url) {
+        try {
+            // 사용자 조회
+            User user = userRepository.findByEmail(email.toLowerCase())
+                    .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다."));
+
+            // 필수 파라미터 검증
+            if (s3Url == null || s3Url.isEmpty()) {
+                log.error("프로필 이미지 URL이 제공되지 않았습니다 - User: {}, s3Key: {}", email, s3Key);
+                throw new RuntimeException("프로필 이미지 URL이 제공되지 않았습니다.");
+            }
+
+            // 기존 프로필 이미지 삭제
+            if (user.getProfileImage() != null && !user.getProfileImage().isEmpty()) {
+                deleteOldProfileImage(user.getProfileImage());
+            }
+
+            // 사용자 프로필 이미지 URL 업데이트
+            user.setProfileImage(s3Url);
+            user.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            log.info("프로필 이미지 메타데이터 저장 완료 - User ID: {}, S3Key: {}, URL: {}", user.getId(), s3Key, s3Url);
+
+            return new ProfileImageResponse(
+                    true,
+                    "프로필 이미지가 업데이트되었습니다.",
+                    s3Url
+            );
+        } catch (UsernameNotFoundException e) {
+            log.error("프로필 이미지 메타데이터 저장 실패 - 사용자 없음: {}", email);
+            throw e;
+        } catch (RuntimeException e) {
+            log.error("프로필 이미지 메타데이터 저장 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("프로필 이미지 메타데이터 저장에 실패했습니다: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("프로필 이미지 메타데이터 저장 중 예기치 않은 오류: {}", e.getMessage(), e);
+            throw new RuntimeException("프로필 이미지 메타데이터 저장 중 오류가 발생했습니다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 특정 사용자 프로필 조회
      */
     public UserResponse getUserProfile(String userId) {
