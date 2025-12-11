@@ -35,12 +35,11 @@ public class JwtService {
 
     /**
      * JWT 토큰 생성
-     * @param sessionId 세션 ID
      * @param email 사용자 이메일 (subject)
      * @param userId 사용자 ID
      * @return 생성된 JWT 토큰
      */
-    public String generateToken(String sessionId, String email, String userId) {
+    public String generateToken(String email, String userId) {
         Instant now = Instant.now();
         Instant expiry = now.plusMillis(jwtExpirationMs);
 
@@ -48,7 +47,6 @@ public class JwtService {
                 .subject(email)
                 .issuedAt(now)
                 .expiresAt(expiry)
-                .claim("sessionId", sessionId)
                 .claim("userId", userId)
                 .build();
         var defaultJwsHeader = JwsHeader.with(MacAlgorithm.HS256).build();
@@ -108,18 +106,6 @@ public class JwtService {
     }
 
     /**
-     * 토큰에서 세션 ID 추출
-     */
-    public String extractSessionId(String token) {
-        try {
-            return jwtDecoder.decode(token).getClaim("sessionId");
-        } catch (JwtException e) {
-            log.error("Failed to extract sessionId from token: {}", e.getMessage());
-            throw e;
-        }
-    }
-
-    /**
      * 토큰에서 만료 시간 추출
      */
     public Instant extractExpiration(String token) {
@@ -156,15 +142,4 @@ public class JwtService {
         }
     }
 
-    /**
-     * 만료된 토큰에서 세션 ID 추출
-     */
-    public String extractSessionIdFromExpiredToken(String token) {
-        try {
-            return expiredTokenDecoder.decode(token).getClaim("sessionId");
-        } catch (JwtException e) {
-            log.error("Failed to extract sessionId from expired token: {}", e.getMessage());
-            return null;
-        }
-    }
 }

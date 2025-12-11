@@ -95,9 +95,6 @@ api.interceptors.request.use(
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     if (user?.token) {
       config.headers["x-auth-token"] = user.token;
-      if (user.sessionId) {
-        config.headers["x-session-id"] = user.sessionId;
-      }
     }
 
     return config;
@@ -122,8 +119,7 @@ class AuthService {
           name: response.data.user.name,
           email: response.data.user.email,
           profileImage: response.data.user.profileImage,
-          token: response.data.token,
-          sessionId: response.data.sessionId
+          token: response.data.token
         };
 
         return userData;
@@ -153,13 +149,12 @@ class AuthService {
    * 로그아웃 API 호출
    * 상태 관리와 리다이렉션은 AuthContext에서 처리
    */
-  async logout(token, sessionId) {
+  async logout(token) {
     try {
       if (token) {
         await api.post("/api/auth/logout", null, {
           headers: {
-            "x-auth-token": token,
-            "x-session-id": sessionId
+            "x-auth-token": token
           }
         });
       }
@@ -190,7 +185,7 @@ class AuthService {
    * 프로필 업데이트 API 호출
    * 상태 업데이트는 AuthContext에서 처리
    */
-  async updateProfile(data, token, sessionId) {
+  async updateProfile(data, token) {
     try {
       if (!token) {
         throw new Error("인증 정보가 없습니다.");
@@ -199,8 +194,7 @@ class AuthService {
       const response = await axios.put(`${API_URL}/api/users/profile`, data, {
         headers: {
           "Content-Type": "application/json",
-          "x-auth-token": token,
-          "x-session-id": sessionId
+          "x-auth-token": token
         }
       });
 
@@ -221,7 +215,7 @@ class AuthService {
   /**
    * 비밀번호 변경 API 호출
    */
-  async changePassword(currentPassword, newPassword, token, sessionId) {
+  async changePassword(currentPassword, newPassword, token) {
     try {
       if (!token) {
         throw new Error("인증 정보가 없습니다.");
@@ -235,9 +229,8 @@ class AuthService {
         },
         {
           headers: {
-            "Content-Type": "application/json",
-            "x-auth-token": token,
-            "x-session-id": sessionId
+          "Content-Type": "application/json",
+          "x-auth-token": token
           }
         }
       );
