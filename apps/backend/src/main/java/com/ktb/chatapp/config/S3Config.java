@@ -15,7 +15,6 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 
 @Configuration
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "app.file", name = "storage", havingValue = "s3")
 public class S3Config {
 
     @Value("${app.file.s3.access-key}")
@@ -35,6 +34,13 @@ public class S3Config {
 
     @Bean
     public S3Client s3Client() {
+        if (!StringUtils.hasText(accessKey) || !StringUtils.hasText(secretKey)) {
+            throw new IllegalStateException("S3 access-key and secret-key must be configured. Set FILE_S3_ACCESS_KEY and FILE_S3_SECRET_KEY environment variables.");
+        }
+        if (!StringUtils.hasText(region)) {
+            throw new IllegalStateException("S3 region must be configured. Set FILE_S3_REGION environment variable.");
+        }
+        
         var credentials = AwsBasicCredentials.create(accessKey, secretKey);
         software.amazon.awssdk.services.s3.S3ClientBuilder builder = S3Client.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
