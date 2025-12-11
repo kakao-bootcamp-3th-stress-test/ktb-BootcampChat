@@ -20,8 +20,10 @@ services:
     restart: unless-stopped
     ports:
       - "9216:9216"
-    environment:
-      - MONGODB_URI=mongodb://mongo:27017
+    command:
+      - '--mongodb.uri=mongodb://mongo:27017'
+      - '--collect-all'
+      - '--discovering-mode'
     depends_on:
       - mongo
     networks:
