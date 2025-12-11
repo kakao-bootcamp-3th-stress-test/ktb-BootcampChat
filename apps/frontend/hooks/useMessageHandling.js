@@ -68,7 +68,7 @@ export const useMessageHandling = (
     socketRef.current.emit("fetchPreviousMessages", {
       roomId: router?.query?.room,
       before: beforeTimestamp,
-      limit: 30
+      limit: 10
     });
   }, [socketRef, router?.query?.room, loadingMessages, messages, setLoadingMessages]);
 

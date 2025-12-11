@@ -74,8 +74,15 @@ const ChatInput = forwardRef(
     );
 
     const handleFileRemove = useCallback((fileToRemove) => {
+      // 메모리 누수 방지: Blob URL 즉시 해제
+      if (fileToRemove.url) {
+        try {
+          URL.revokeObjectURL(fileToRemove.url);
+        } catch (e) {
+          console.warn('Failed to revoke Blob URL:', e);
+        }
+      }
       setFiles((prev) => prev.filter((file) => file.name !== fileToRemove.name));
-      URL.revokeObjectURL(fileToRemove.url);
       setUploadError(null);
       setUploadProgress(0);
     }, []);
@@ -116,6 +123,16 @@ const ChatInput = forwardRef(
             });
 
             setMessage("");
+            // 메모리 누수 방지: 업로드 후 Blob URL 해제
+            files.forEach((f) => {
+              if (f.url) {
+                try {
+                  URL.revokeObjectURL(f.url);
+                } catch (e) {
+                  // 무시
+                }
+              }
+            });
             setFiles([]);
           } catch (error) {
             console.error("File submit error:", error);
@@ -177,7 +194,16 @@ const ChatInput = forwardRef(
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
         document.removeEventListener("paste", handlePaste);
-        files.forEach((file) => URL.revokeObjectURL(file.url));
+        // 메모리 누수 방지: 모든 Blob URL 해제
+        files.forEach((file) => {
+          if (file.url) {
+            try {
+              URL.revokeObjectURL(file.url);
+            } catch (e) {
+              // Blob URL이 이미 해제된 경우 무시
+            }
+          }
+        });
       };
     }, [
       showEmojiPicker,

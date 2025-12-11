@@ -372,14 +372,32 @@ class SocketService {
 
 const socketService = new SocketService();
 
+// 메모리 누수 방지: 이벤트 핸들러 참조 저장
+let onlineHandler = null;
+let offlineHandler = null;
+
 if (typeof window !== "undefined") {
-  window.addEventListener("online", () => {
+  onlineHandler = () => {
     if (!socketService.isConnected() && !socketService.isReconnecting) {
       socketService.connect();
     }
-  });
+  };
 
-  window.addEventListener("offline", () => {
+  offlineHandler = () => {
+    socketService.disconnect();
+  };
+
+  window.addEventListener("online", onlineHandler);
+  window.addEventListener("offline", offlineHandler);
+
+  // 페이지 언로드 시 cleanup
+  window.addEventListener("beforeunload", () => {
+    if (onlineHandler) {
+      window.removeEventListener("online", onlineHandler);
+    }
+    if (offlineHandler) {
+      window.removeEventListener("offline", offlineHandler);
+    }
     socketService.disconnect();
   });
 }

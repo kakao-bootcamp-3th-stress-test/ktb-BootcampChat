@@ -47,6 +47,31 @@ export const AuthProvider = ({ children }) => {
   const router = useRouter();
   const sessionCheckInterval = useRef(null);
 
+  // 저장된 토큰을 서버에서 검증해 stale 토큰으로 잘못 인증되는 것을 방지
+  const verifyStoredToken = useCallback(async (token) => {
+    if (!token) {
+      throw new Error("No authentication token found");
+    }
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL;
+    const response = await fetch(`${API_URL}/api/auth/verify-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-auth-token": token
+      },
+      credentials: "include"
+    });
+
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.message || "Token validation failed");
+    }
+
+    localStorage.setItem("lastTokenVerification", Date.now().toString());
+    return true;
+  }, []);
+
   // localStorage에서 사용자 정보 로드
   const loadUserFromStorage = useCallback(() => {
     try {
@@ -125,10 +150,37 @@ export const AuthProvider = ({ children }) => {
 
   // 초기 로드
   useEffect(() => {
-    const userData = loadUserFromStorage();
-    setUser(userData);
-    setIsLoading(false);
-  }, [loadUserFromStorage]);
+    let cancelled = false;
+
+    const initializeAuth = async () => {
+      const userData = loadUserFromStorage();
+
+      if (!userData) {
+        if (!cancelled) setIsLoading(false);
+        return;
+      }
+
+      // 우선 상태에 설정한 뒤 토큰 유효성 검증
+      setUser(userData);
+
+      try {
+        await verifyStoredToken(userData.token);
+      } catch (error) {
+        // 유효하지 않은 토큰이면 저장소 정리 후 인증 해제
+        localStorage.removeItem("user");
+        localStorage.removeItem("lastTokenVerification");
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadUserFromStorage, verifyStoredToken]);
 
   // 로그인 (API 호출 + 상태 저장)
   const login = useCallback(
