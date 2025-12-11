@@ -1,0 +1,40 @@
+name: Deploy MongoDB
+
+on:
+  push:
+    branches:
+      - ci-cd
+    paths:
+      - 'apps/backend/docker-compose.mongo.yaml'
+      - '.github/workflows/deploy-mongodb.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SERVER: ${{ secrets.MONGODB_SERVER_IP }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key and known hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SERVER >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Copy docker-compose file
+        run: |
+          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.mongo.yaml ubuntu@$SERVER:/home/ubuntu/
+
+      - name: Deploy MongoDB stack
+        run: |
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker compose -f docker-compose.mongo.yaml pull && sudo docker compose -f docker-compose.mongo.yaml up -d --force-recreate"
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=mongo' --filter 'name=mongodb-exporter' --format 'table {{.Names}}\t{{.Status}}'"
+
