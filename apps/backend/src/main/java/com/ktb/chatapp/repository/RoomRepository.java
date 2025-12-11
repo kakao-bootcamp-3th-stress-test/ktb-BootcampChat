@@ -1,14 +1,14 @@
 package com.ktb.chatapp.repository;
 
 import com.ktb.chatapp.model.Room;
+
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.data.mongodb.repository.Update;
 import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
 
 @Repository
 public interface RoomRepository extends MongoRepository<Room, String> {
@@ -18,6 +18,8 @@ public interface RoomRepository extends MongoRepository<Room, String> {
 
     // 검색어와 함께 페이지네이션 조회
     Page<Room> findByNameContainingIgnoreCase(String name, Pageable pageable);
+
+    long countByNameContainingIgnoreCase(String name);
 
     // 가장 최근에 생성된 방 조회 (Health Check용)
     @Query(value = "{}", sort = "{ 'createdAt': -1 }")
