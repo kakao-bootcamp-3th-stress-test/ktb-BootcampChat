@@ -84,7 +84,7 @@ export const useSocketHandling = (router, maxRetries = 5) => {
       if (isReconnecting) return;
 
       try {
-        if (!currentUser?.token || !currentUser?.sessionId) {
+        if (!currentUser?.token) {
           throw new Error("Invalid user credentials");
         }
 
@@ -101,8 +101,7 @@ export const useSocketHandling = (router, maxRetries = 5) => {
 
         const socket = await socketService.connect({
           auth: {
-            token: currentUser.token,
-            sessionId: currentUser.sessionId
+            token: currentUser.token
           },
           transports: ["websocket", "polling"],
           reconnection: true,

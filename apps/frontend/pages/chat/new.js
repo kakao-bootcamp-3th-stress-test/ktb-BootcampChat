@@ -34,8 +34,7 @@ function NewChatRoom() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-auth-token": currentUser.token,
-            "x-session-id": currentUser.sessionId
+            "x-auth-token": currentUser.token
           },
           body: JSON.stringify({ password })
         }
@@ -79,8 +78,7 @@ function NewChatRoom() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-auth-token": currentUser.token,
-          "x-session-id": currentUser.sessionId
+          "x-auth-token": currentUser.token
         },
         body: JSON.stringify({
           name: formData.name.trim(),

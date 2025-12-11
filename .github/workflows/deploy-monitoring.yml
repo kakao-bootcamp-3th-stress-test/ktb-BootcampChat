@@ -151,7 +151,7 @@ jobs:
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.o11y.yaml ubuntu@$SERVER:/home/ubuntu/
 
           # Deploy monitoring stack
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && export ENVIRONMENT=prod && export GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin} && export GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin} && sudo -E docker compose -f docker-compose.o11y.yaml pull && sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && export ENVIRONMENT=prod && export GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin} && export GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin} && sudo -E docker compose -f docker-compose.o11y.yaml pull && sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate"
 
           # Verify deployment
           sleep 10

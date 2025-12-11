@@ -63,8 +63,7 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
         {
           method: "POST",
           headers: {
-            "x-auth-token": user?.token,
-            "x-session-id": user?.sessionId
+            "x-auth-token": user?.token
           },
           body: formData
         }
@@ -123,8 +122,7 @@ const ProfileImageUpload = ({ currentImage, onImageChange }) => {
         {
           method: "DELETE",
           headers: {
-            "x-auth-token": user?.token,
-            "x-session-id": user?.sessionId
+            "x-auth-token": user?.token
           }
         }
       );

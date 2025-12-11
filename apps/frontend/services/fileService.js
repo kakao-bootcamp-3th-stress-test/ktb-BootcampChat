@@ -75,9 +75,7 @@ class FileService {
     return { success: true };
   }
 
-  async uploadFile(file, onProgress, token, sessionId) {
-    // validateFile은 내부적으로 s3UploadUtils의 validateFile을 사용하므로
-    // uploadToS3에서도 동일한 검증이 수행됨 (중복이지만 안전을 위해 유지)
+  async uploadFile(file, onProgress) {
     const validationResult = await this.validateFile(file);
     if (!validationResult.success) {
       return validationResult;
@@ -156,7 +154,7 @@ class FileService {
       return this.handleUploadError(error);
     }
   }
-  async downloadFile(filename, originalname, token, sessionId) {
+  async downloadFile(filename, originalname) {
     try {
       // 파일 존재 여부 먼저 확인
       const downloadUrl = this.getFileUrl(filename, false);
@@ -246,19 +244,18 @@ class FileService {
     return `${baseUrl}/api/files/${endpoint}/${filename}`;
   }
 
-  getPreviewUrl(file, token, sessionId, withAuth = true) {
+  getPreviewUrl(file, token, withAuth = true) {
     if (!file?.filename) return "";
 
     const baseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/files/view/${file.filename}`;
 
     if (!withAuth) return baseUrl;
 
-    if (!token || !sessionId) return baseUrl;
+    if (!token) return baseUrl;
 
     // URL 객체 생성 전 프로토콜 확인
     const url = new URL(baseUrl);
     url.searchParams.append("token", encodeURIComponent(token));
-    url.searchParams.append("sessionId", encodeURIComponent(sessionId));
 
     return url.toString();
   }
@@ -287,15 +284,14 @@ class FileService {
     return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${units[i]}`;
   }
 
-  getHeaders(token, sessionId) {
-    if (!token || !sessionId) {
+  getHeaders(token) {
+    if (!token) {
       return {
         Accept: "application/json, */*"
       };
     }
     return {
       "x-auth-token": token,
-      "x-session-id": sessionId,
       Accept: "application/json, */*"
     };
   }

@@ -93,9 +93,7 @@ export const useMessageHandling = (
 
           const uploadResponse = await fileService.uploadFile(
             messageData.fileData.file,
-            (progress) => setUploadProgress(progress),
-            currentUser.token,
-            currentUser.sessionId
+            (progress) => setUploadProgress(progress)
           );
 
           if (!uploadResponse.success) {

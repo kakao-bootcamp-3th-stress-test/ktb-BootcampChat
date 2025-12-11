@@ -1,7 +1,6 @@
 package com.ktb.chatapp.config;
 
 import com.ktb.chatapp.security.CustomBearerTokenResolver;
-import com.ktb.chatapp.security.SessionAwareJwtAuthenticationConverter;
 import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,22 +27,18 @@ public class SecurityConfig {
 
     private final JwtDecoder jwtDecoder;
     private final CustomBearerTokenResolver bearerTokenResolver;
-    private final SessionAwareJwtAuthenticationConverter jwtAuthenticationConverter;
-
     private static final List<String> CORS_ALLOWED_ORIGINS = List.of("*");
 
     private static final List<String> CORS_ALLOWED_HEADERS = List.of(
             "Content-Type",
             "Authorization",
             "x-auth-token",
-            "x-session-id",
             "Cache-Control",
             "Pragma"
     );
 
     private static final List<String> CORS_EXPOSED_HEADERS = List.of(
-            "x-auth-token",
-            "x-session-id"
+            "x-auth-token"
     );
 
     private static final List<String> CORS_ALLOWED_METHODS = List.of("GET", "POST", "PUT", "DELETE", "OPTIONS");
@@ -83,10 +78,7 @@ public class SecurityConfig {
                 // Spring Security 6 OAuth2 Resource Server 설정
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(bearerTokenResolver)
-                        .jwt(jwt -> jwt
-                                .decoder(jwtDecoder)
-                                .jwtAuthenticationConverter(jwtAuthenticationConverter)
-                        )
+                        .jwt(jwt -> jwt.decoder(jwtDecoder))
                 );
         
         return http.build();
