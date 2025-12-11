@@ -1,12 +1,12 @@
-name: Deploy Redis
+name: Deploy Redis PubSub
 
 on:
   push:
     branches:
       - ci-cd
     paths:
-      - 'apps/backend/docker-compose.redis.yaml'
-      - '.github/workflows/deploy-redis.yml'
+      - 'apps/backend/docker-compose.redis-pubsub.yaml'
+      - '.github/workflows/deploy-redis-pubsub.yml'
   workflow_dispatch:
 
 jobs:
@@ -23,11 +23,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      - name: Get Redis Main Server IP and Deploy
+      - name: Get Redis PubSub Server IP and Deploy
         run: |
           # Get server IP
           SERVER=$(aws ec2 describe-instances \
-            --filters "Name=tag:Role,Values=database" "Name=tag:Service,Values=redis-main" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Role,Values=database" "Name=tag:Service,Values=redis-pubsub" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --output text)
           
@@ -38,12 +38,12 @@ jobs:
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
           # Copy docker-compose file
-          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.redis.yaml ubuntu@$SERVER:/home/ubuntu/
+          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.redis-pubsub.yaml ubuntu@$SERVER:/home/ubuntu/
           
-          # Deploy Redis stack
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && sudo docker compose -f docker-compose.redis.yaml down -v && sudo docker compose -f docker-compose.redis.yaml pull && sudo docker compose -f docker-compose.redis.yaml up -d"
+          # Deploy Redis PubSub stack
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && sudo docker compose -f docker-compose.redis-pubsub.yaml down -v && sudo docker compose -f docker-compose.redis-pubsub.yaml pull && sudo docker compose -f docker-compose.redis-pubsub.yaml up -d"
           
           # Verify deployment
           sleep 10
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=redis' --filter 'name=redis-exporter' --format 'table {{.Names}}\t{{.Status}}'"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=redis-pubsub' --filter 'name=redis-pubsub-exporter' --format 'table {{.Names}}\t{{.Status}}'"
 

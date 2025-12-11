@@ -1,8 +1,5 @@
 // utils/colorUtils.js
 
-// 전역 색상 캐시 맵
-const globalColorCache = new Map();
-
 // 사용자 색상 팔레트 (Vapor UI 색상 토큰 기반)
 const USER_COLORS = [
   "#d54049", // red-500
@@ -23,11 +20,6 @@ const USER_COLORS = [
 export const generateColorFromEmail = (email) => {
   if (!email) return "#3174dc"; // default blue-500
 
-  // 캐시된 색상이 있는지 확인
-  if (globalColorCache.has(email)) {
-    return globalColorCache.get(email);
-  }
-
   // 해시 생성
   let hash = 0;
   for (let i = 0; i < email.length; i++) {
@@ -36,10 +28,7 @@ export const generateColorFromEmail = (email) => {
   }
 
   // 색상 선택
-  const color = USER_COLORS[Math.abs(hash) % USER_COLORS.length];
-  globalColorCache.set(email, color);
-
-  return color;
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length];
 };
 
 // 배경색에 따른 텍스트 색상 계산

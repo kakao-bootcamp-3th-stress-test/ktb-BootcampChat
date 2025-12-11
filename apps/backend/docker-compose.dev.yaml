@@ -19,6 +19,15 @@ services:
     volumes:
       - redis_data:/data
 
+  redis-pubsub:
+    image: redis:7.2
+    container_name: redis-pubsub-ktb
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_pubsub_data:/data
+
   mongodb-exporter:
     image: percona/mongodb_exporter:0.47.1
     container_name: mongodb-exporter-ktb
@@ -114,6 +123,7 @@ networks:
 volumes:
   mongo_data:
   redis_data:
+  redis_pubsub_data:
   prometheus_data:
   grafana_data:
   minio_data:

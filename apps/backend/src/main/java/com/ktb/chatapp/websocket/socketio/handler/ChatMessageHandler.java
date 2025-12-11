@@ -154,7 +154,10 @@ public class ChatMessageHandler {
             }
 
             Message savedMessage = messageRepository.save(message);
-            messageDispatchQueue.enqueue(messageResponseMapper.mapToMessageResponse(savedMessage));
+            MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage);
+
+            // 채팅 메시지를 큐에 넣어서 비동기로 처리
+            messageDispatchQueue.enqueue(response);
 
             // AI 멘션 처리
             aiService.handleAIMentions(roomId, socketUser.id(), messageContent);
@@ -223,7 +226,6 @@ public class ChatMessageHandler {
 
         return message;
     }
-
 
     // Metrics helper methods
     private Timer createTimer(String status, String messageType) {
