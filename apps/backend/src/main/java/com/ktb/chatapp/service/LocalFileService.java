@@ -17,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @Service
+@ConditionalOnProperty(prefix = "app.file", name = "storage", havingValue = "local", matchIfMissing = true)
 public class LocalFileService implements FileService {
 
     private final Path fileStorageLocation;
@@ -132,11 +134,10 @@ public class LocalFileService implements FileService {
             log.info("파일 저장 완료: {}", safeFileName);
 
             // URL 반환 (서브디렉토리 포함)
-            if (subDirectory != null && !subDirectory.trim().isEmpty()) {
-                return "/api/uploads/" + subDirectory + "/" + safeFileName;
-            } else {
-                return "/api/uploads/" + safeFileName;
-            }
+            String relativePath = (subDirectory != null && !subDirectory.trim().isEmpty())
+                ? subDirectory + "/" + safeFileName
+                : safeFileName;
+            return "/api/uploads/" + relativePath;
 
         } catch (IOException ex) {
             log.error("파일 저장 실패: {}", ex.getMessage(), ex);
@@ -206,6 +207,26 @@ public class LocalFileService implements FileService {
         } catch (Exception e) {
             log.error("파일 삭제 실패: {}", e.getMessage(), e);
             throw new RuntimeException("파일 삭제 중 오류가 발생했습니다.", e);
+        }
+    }
+
+    @Override
+    public void deleteStoredFile(String storedPath) {
+        if (storedPath == null || storedPath.isEmpty()) {
+            return;
+        }
+        try {
+            String relativePath = storedPath;
+            if (relativePath.startsWith("/api/uploads/")) {
+                relativePath = relativePath.substring("/api/uploads/".length());
+            } else if (relativePath.startsWith("/uploads/")) {
+                relativePath = relativePath.substring("/uploads/".length());
+            }
+            Path filePath = this.fileStorageLocation.resolve(relativePath);
+            Files.deleteIfExists(filePath);
+            log.info("Stored file deleted: {}", filePath);
+        } catch (IOException e) {
+            log.warn("Failed to delete stored file {}: {}", storedPath, e.getMessage());
         }
     }
 }
