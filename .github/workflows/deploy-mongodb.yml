@@ -41,7 +41,7 @@ jobs:
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.mongo.yaml ubuntu@$SERVER:/home/ubuntu/
           
           # Deploy MongoDB stack
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker compose -f docker-compose.mongo.yaml pull && sudo docker compose -f docker-compose.mongo.yaml up -d --force-recreate"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && sudo -E docker compose -f docker-compose.mongo.yaml pull && sudo -E docker compose -f docker-compose.mongo.yaml up -d --force-recreate"
           
           # Verify deployment
           sleep 10
