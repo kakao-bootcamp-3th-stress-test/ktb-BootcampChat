@@ -12,6 +12,7 @@ import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.repository.RoomRepository;
 import com.ktb.chatapp.repository.UserRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -36,10 +37,12 @@ public class MessageReadHandler {
     private final MessageRepository messageRepository;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final SocketConnectionTracker connectionTracker;
     
     @OnEvent(MARK_MESSAGES_AS_READ)
     public void handleMarkAsRead(SocketIOClient client, MarkAsReadRequest data) {
         try {
+            connectionTracker.touch(client);
             String userId = getUserId(client);
             if (userId == null) {
                 client.sendEvent(ERROR, Map.of("message", "Unauthorized"));
@@ -88,6 +91,6 @@ public class MessageReadHandler {
     
     private String getUserId(SocketIOClient client) {
         var user = (SocketUser) client.get("user");
-        return user.id();
+        return user != null ? user.id() : null;
     }
 }

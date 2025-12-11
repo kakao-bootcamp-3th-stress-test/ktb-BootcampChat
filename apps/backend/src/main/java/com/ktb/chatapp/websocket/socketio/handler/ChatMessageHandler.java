@@ -18,6 +18,7 @@ import com.ktb.chatapp.service.SessionService;
 import com.ktb.chatapp.service.SessionValidationResult;
 import com.ktb.chatapp.service.RateLimitService;
 import com.ktb.chatapp.service.RateLimitCheckResult;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -47,10 +48,12 @@ public class ChatMessageHandler {
     private final BannedWordChecker bannedWordChecker;
     private final RateLimitService rateLimitService;
     private final MeterRegistry meterRegistry;
+    private final SocketConnectionTracker connectionTracker;
     
     @OnEvent(CHAT_MESSAGE)
     public void handleChatMessage(SocketIOClient client, ChatMessageRequest data) {
         Timer.Sample timerSample = Timer.start(meterRegistry);
+        connectionTracker.touch(client);
 
         if (data == null) {
             recordError("null_data");

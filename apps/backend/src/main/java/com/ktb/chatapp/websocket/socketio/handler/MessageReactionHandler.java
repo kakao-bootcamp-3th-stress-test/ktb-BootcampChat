@@ -7,6 +7,7 @@ import com.ktb.chatapp.dto.message.MessageReactionRequest;
 import com.ktb.chatapp.dto.message.MessageReactionResponse;
 import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.repository.MessageRepository;
+import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,10 +29,12 @@ public class MessageReactionHandler {
     
     private final SocketIOServer socketIOServer;
     private final MessageRepository messageRepository;
+    private final SocketConnectionTracker connectionTracker;
     
     @OnEvent(MESSAGE_REACTION)
     public void handleMessageReaction(SocketIOClient client, MessageReactionRequest data) {
         try {
+            connectionTracker.touch(client);
             String userId = getUserId(client);
             if (userId == null || userId.isBlank()) {
                 client.sendEvent(ERROR, Map.of("message", "Unauthorized"));
@@ -76,6 +79,6 @@ public class MessageReactionHandler {
     
     private String getUserId(SocketIOClient client) {
         var user = (SocketUser) client.get("user");
-        return user.id();
+        return user != null ? user.id() : null;
     }
 }
