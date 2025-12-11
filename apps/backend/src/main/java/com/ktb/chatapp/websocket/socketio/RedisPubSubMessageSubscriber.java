@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -22,10 +23,11 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.MESSAGE;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnBean(RedissonClient.class)
+@ConditionalOnBean(name = "pubSubRedissonClient")
 @ConditionalOnProperty(name = "app.pubsub-redis.enabled", havingValue = "true")
 public class RedisPubSubMessageSubscriber {
 
+    @Qualifier("pubSubRedissonClient")
     private final RedissonClient pubSubRedissonClient;
     private final ObjectMapper objectMapper;
     private final SocketIOServer socketIOServer;

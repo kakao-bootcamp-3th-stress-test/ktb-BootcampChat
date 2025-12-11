@@ -7,6 +7,7 @@ import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.redisson.config.SingleServerConfig;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -24,8 +25,9 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(PubSubRedisConfig.PubSubRedisProperties.class)
 public class PubSubRedisConfig {
 
-    @Bean(destroyMethod = "shutdown")
+    @Bean(name = "pubSubRedissonClient", destroyMethod = "shutdown")
     @ConditionalOnProperty(name = "app.pubsub-redis.enabled", havingValue = "true")
+    @Qualifier("pubSubRedissonClient")
     public RedissonClient pubSubRedissonClient(PubSubRedisProperties properties) {
         Config config = new Config();
         SingleServerConfig serverConfig = config.useSingleServer()

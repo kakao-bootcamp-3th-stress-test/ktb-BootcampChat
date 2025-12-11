@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnBean(RedissonClient.class)
+@ConditionalOnBean(name = "pubSubRedissonClient")
 @ConditionalOnProperty(name = "app.pubsub-redis.enabled", havingValue = "true")
 public class RedisPubSubMessagePublisher implements ChatMessagePublisher {
 
@@ -30,6 +31,7 @@ public class RedisPubSubMessagePublisher implements ChatMessagePublisher {
      */
     public static final String CHAT_MESSAGES_CHANNEL = "chat:messages";
 
+    @Qualifier("pubSubRedissonClient")
     private final RedissonClient pubSubRedissonClient;
     private final ObjectMapper objectMapper;
 
