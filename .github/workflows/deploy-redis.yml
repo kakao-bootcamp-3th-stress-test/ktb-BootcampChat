@@ -29,7 +29,15 @@ jobs:
           SERVER=$(aws ec2 describe-instances \
             --filters "Name=tag:Role,Values=database" "Name=tag:Service,Values=redis-main" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
-            --output text)
+            --output text | head -n1 | tr -d '[:space:]')
+          
+          # Validate server IP
+          if [ -z "$SERVER" ]; then
+            echo "Error: No Redis server found with the specified tags"
+            exit 1
+          fi
+          
+          echo "Deploying to Redis server: $SERVER"
           
           # Setup SSH
           mkdir -p ~/.ssh
