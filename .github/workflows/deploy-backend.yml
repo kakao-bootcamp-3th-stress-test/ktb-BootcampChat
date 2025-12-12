@@ -34,8 +34,18 @@ jobs:
       - name: Build and push Docker image
         working-directory: apps/backend
         run: |
-          docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest
+          set -e
+          echo "Building Docker image..."
+          docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest . || {
+            echo "Docker build failed!"
+            exit 1
+          }
+          echo "Pushing Docker image..."
+          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest || {
+            echo "Docker push failed!"
+            exit 1
+          }
+          echo "Build and push completed successfully"
 
   deploy:
     needs: build-and-push
