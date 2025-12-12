@@ -109,6 +109,7 @@ public class RoomService {
             List<RoomResponse> baseRoomResponses = roomSummaries.stream()
                 .map(summary -> mapToRoomResponse(summary, null, usersById, recentCounts))
                 .toList();
+            List<RoomResponse> sanitizedResponses = stripParticipants(baseRoomResponses);
 
             // 메타데이터 생성
             PageMetadata metadata = PageMetadata.builder()
@@ -117,18 +118,18 @@ public class RoomService {
                 .pageSize(pageRequest.getPageSize())
                 .totalPages(calculateTotalPages(total, pageRequest.getPageSize()))
                 .hasMore(hasMorePages(total, pageRequest.getPage(), pageRequest.getPageSize()))
-                .currentCount(baseRoomResponses.size())
+                .currentCount(sanitizedResponses.size())
                 .sort(PageMetadata.SortInfo.builder()
                     .field(pageRequest.getSortField())
                     .order(pageRequest.getSortOrder())
                     .build())
                 .build();
 
-            roomListCache.put(cacheKey, baseRoomResponses, metadata);
+            roomListCache.put(cacheKey, sanitizedResponses, metadata);
 
             return RoomsResponse.builder()
                 .success(true)
-                .data(applyRequesterIdentity(baseRoomResponses, name))
+                .data(applyRequesterIdentity(sanitizedResponses, name))
                 .metadata(metadata)
                 .build();
 
@@ -479,7 +480,8 @@ public class RoomService {
     }
 
     private RoomsResponse buildResponseFromCache(CachedRoomsPage cached, String requesterIdentity) {
-        List<RoomResponse> responses = applyRequesterIdentity(cached.rooms(), requesterIdentity);
+        List<RoomResponse> sanitized = stripParticipants(cached.rooms());
+        List<RoomResponse> responses = applyRequesterIdentity(sanitized, requesterIdentity);
         return RoomsResponse.builder()
             .success(true)
             .data(responses)
@@ -503,5 +505,19 @@ public class RoomService {
             return false;
         }
         return response.getCreator().getEmail().equalsIgnoreCase(requesterIdentity);
+    }
+
+    /**
+     * getAllRoomsWithPagination 응답에서는 participants 정보를 사용할 필요가 없으므로 제거한다.
+     */
+    private List<RoomResponse> stripParticipants(List<RoomResponse> responses) {
+        if (responses == null || responses.isEmpty()) {
+            return List.of();
+        }
+        return responses.stream()
+            .map(response -> response.getParticipants() == null
+                ? response
+                : response.toBuilder().participants(null).build())
+            .toList();
     }
 }
