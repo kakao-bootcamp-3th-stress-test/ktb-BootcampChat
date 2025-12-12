@@ -1,12 +1,9 @@
 package com.ktb.chatapp.websocket.socketio.handler;
 
 import com.corundumstudio.socketio.SocketIOClient;
-import com.corundumstudio.socketio.SocketIOServer;
 import com.corundumstudio.socketio.annotation.OnEvent;
-import com.ktb.chatapp.dto.FileResponse;
 import com.ktb.chatapp.dto.message.ChatMessageRequest;
 import com.ktb.chatapp.dto.message.MessageContent;
-import com.ktb.chatapp.dto.message.MessageResponse;
 import com.ktb.chatapp.model.*;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
@@ -15,11 +12,12 @@ import com.ktb.chatapp.util.BannedWordChecker;
 import com.ktb.chatapp.websocket.socketio.ai.AiService;
 import com.ktb.chatapp.service.RateLimitService;
 import com.ktb.chatapp.service.RateLimitCheckResult;
-import com.ktb.chatapp.websocket.socketio.ChatMessagePublisher;
 import com.ktb.chatapp.websocket.socketio.SocketConnectionTracker;
 import com.ktb.chatapp.websocket.socketio.SocketUser;
 import com.ktb.chatapp.service.UserLookupService;
 import com.ktb.chatapp.websocket.socketio.UserRooms;
+import com.ktb.chatapp.websocket.socketio.handler.MessageResponseMapper;
+import com.ktb.chatapp.websocket.socketio.message.MessageDispatchQueue;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -38,7 +36,6 @@ import static com.ktb.chatapp.websocket.socketio.SocketIOEvents.*;
 @ConditionalOnProperty(name = "socketio.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class ChatMessageHandler {
-    private final SocketIOServer socketIOServer;
     private final MessageRepository messageRepository;
     private final RoomRepository roomRepository;
     private final FileRepository fileRepository;
@@ -49,8 +46,8 @@ public class ChatMessageHandler {
     private final SocketConnectionTracker connectionTracker;
     private final UserLookupService userLookupService;
     private final UserRooms userRooms;
-    private final ChatMessagePublisher chatMessagePublisher;
     private final MessageResponseMapper messageResponseMapper;
+    private final MessageDispatchQueue messageDispatchQueue;
     
     @OnEvent(CHAT_MESSAGE)
     public void handleChatMessage(SocketIOClient client, ChatMessageRequest data) {
@@ -159,8 +156,8 @@ public class ChatMessageHandler {
             Message savedMessage = messageRepository.save(message);
             MessageResponse response = messageResponseMapper.mapToMessageResponse(savedMessage);
 
-            // 채팅 메시지 브로드캐스트는 ChatMessagePublisher 에 위임
-            chatMessagePublisher.publish(response);
+            // 채팅 메시지를 큐에 넣어서 비동기로 처리
+            messageDispatchQueue.enqueue(response);
 
             // AI 멘션 처리
             aiService.handleAIMentions(roomId, socketUser.id(), messageContent);

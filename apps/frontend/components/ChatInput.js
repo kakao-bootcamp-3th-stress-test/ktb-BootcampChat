@@ -36,6 +36,7 @@ const ChatInput = forwardRef(
     const dropZoneRef = useRef(null);
     const internalInputRef = useRef(null);
     const messageInputRef = ref || internalInputRef;
+    const isComposingRef = useRef(false); // IME 조합 상태 추적
     const [files, setFiles] = useState([]);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -348,8 +349,21 @@ const ChatInput = forwardRef(
       [message, setMessage, setShowMentionList, messageInputRef]
     );
 
+    const handleCompositionStart = useCallback(() => {
+      isComposingRef.current = true;
+    }, []);
+
+    const handleCompositionEnd = useCallback(() => {
+      isComposingRef.current = false;
+    }, []);
+
     const handleKeyDown = useCallback(
       (e) => {
+        // IME 조합 중에는 Enter 키 처리 무시
+        if (isComposingRef.current && e.key === "Enter") {
+          return;
+        }
+
         if (showMentionList) {
           const participants = getFilteredParticipants(room); // room 객체 전달
           const participantsCount = participants.length;
@@ -484,6 +498,8 @@ const ChatInput = forwardRef(
                   value={message}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
                   placeholder={
                     isDragging
                       ? "파일을 여기에 놓아주세요."

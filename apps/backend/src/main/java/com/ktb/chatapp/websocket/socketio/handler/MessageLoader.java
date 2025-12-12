@@ -8,10 +8,13 @@ import com.ktb.chatapp.model.Message;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
 import com.ktb.chatapp.service.MessageReadStatusService;
+import com.ktb.chatapp.websocket.socketio.message.RecentMessageCache;
+import com.ktb.chatapp.websocket.socketio.message.RecentMessageCache.CachedMessagesPage;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +36,7 @@ public class MessageLoader {
     private final FileRepository fileRepository;
     private final MessageResponseMapper messageResponseMapper;
     private final MessageReadStatusService messageReadStatusService;
+    private final RecentMessageCache recentMessageCache;
 
     private static final int BATCH_SIZE = 30;
 
@@ -41,7 +45,31 @@ public class MessageLoader {
      */
     public FetchMessagesResponse loadMessages(FetchMessagesRequest data, String userId) {
         try {
-            return loadMessagesInternal(data.roomId(), data.limit(BATCH_SIZE), data.before(LocalDateTime.now()), userId);
+            boolean hasCustomBefore = data.before() != null && data.before() > 0;
+            if (!hasCustomBefore) {
+                Optional<CachedMessagesPage> cachedPage = recentMessageCache.getRecentMessages(
+                    data.roomId(), data.limit(BATCH_SIZE));
+                if (cachedPage.isPresent()) {
+                    var cachedMessages = cachedPage.get().messages();
+                    messageReadStatusService.updateReadStatus(
+                        cachedMessages.stream()
+                            .map(MessageResponse::getId)
+                            .filter(Objects::nonNull)
+                            .toList(),
+                        userId
+                    );
+                    return FetchMessagesResponse.builder()
+                        .messages(cachedMessages)
+                        .hasMore(cachedPage.get().hasMore())
+                        .build();
+                }
+            }
+            return loadMessagesInternal(
+                data.roomId(),
+                data.limit(BATCH_SIZE),
+                data.before(LocalDateTime.now()),
+                userId
+            );
         } catch (Exception e) {
             log.error("Error loading initial messages for room {}", data.roomId(), e);
             return FetchMessagesResponse.builder()
