@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Toast } from "../components/Toast";
 import fileService from "../services/fileService";
+import bannedWordChecker from "../utils/bannedWordChecker";
 
 export const useMessageHandling = (
   socketRef,
@@ -86,6 +87,12 @@ export const useMessageHandling = (
       }
 
       try {
+        // 프론트엔드에서 금칙어 검사 (서버 부하 감소)
+        if (messageData.content && bannedWordChecker.containsBannedWord(messageData.content)) {
+          Toast.error("금칙어가 포함되어 메시지를 전송할 수 없습니다.");
+          return;
+        }
+
         if (messageData.type === "file") {
           setUploading(true);
           setUploadError(null);
