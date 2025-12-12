@@ -17,6 +17,9 @@ public class ImmediateMessageDispatchQueue implements MessageDispatchQueue {
 
     @Override
     public void enqueue(MessageResponse response) {
+        if (response == null || response.getRoomId() == null) {
+            return;
+        }
         messageDeliveryService.deliver(response);
     }
 }

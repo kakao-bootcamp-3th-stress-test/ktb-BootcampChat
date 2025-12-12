@@ -4,6 +4,7 @@ import com.corundumstudio.socketio.SocketIOClient;
 import com.corundumstudio.socketio.annotation.OnEvent;
 import com.ktb.chatapp.dto.message.ChatMessageRequest;
 import com.ktb.chatapp.dto.message.MessageContent;
+import com.ktb.chatapp.dto.message.MessageResponse;
 import com.ktb.chatapp.model.*;
 import com.ktb.chatapp.repository.FileRepository;
 import com.ktb.chatapp.repository.MessageRepository;
