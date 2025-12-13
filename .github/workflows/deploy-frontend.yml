@@ -76,9 +76,13 @@ jobs:
           fi
           
           # Convert to JSON array for matrix
-          SERVER_ARRAY=$(echo "$SERVERS" | awk '{for(i=1;i<=NF;i++) if($i!="" && $i!="None") print "\""$i"\""}' | jq -s '.')
+          SERVER_ARRAY=$(echo "$SERVERS" | awk '{for(i=1;i<=NF;i++) if($i!="" && $i!="None") print $i}' | jq -R '.' | jq -s '.')
           
-          echo "servers=$SERVER_ARRAY" >> $GITHUB_OUTPUT
+          {
+            echo "servers<<EOF"
+            echo "$SERVER_ARRAY"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
           echo "Server IPs: $SERVERS"
 
   deploy:
