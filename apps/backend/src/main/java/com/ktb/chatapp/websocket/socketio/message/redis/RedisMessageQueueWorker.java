@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "chat.message.queue.mode", havingValue = "redis", matchIfMissing = true)
+@ConditionalOnProperty(name = "chat.message.queue.mode", havingValue = "redis")
 @RequiredArgsConstructor
 public class RedisMessageQueueWorker {
 
