@@ -36,12 +36,22 @@ jobs:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
           NEXT_PUBLIC_SOCKET_URL: ${{ secrets.NEXT_PUBLIC_SOCKET_URL }}
         run: |
-          docker build \
+          set -e
+          IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:latest"
+          echo "Building and pushing Docker image with buildx..."
+          docker buildx build \
             --platform linux/amd64 \
-            --build-arg NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
-            --build-arg NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL \
-            -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:latest
+            --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+            --build-arg NEXT_PUBLIC_SOCKET_URL="$NEXT_PUBLIC_SOCKET_URL" \
+            --cache-from type=registry,ref=$IMAGE_NAME \
+            --cache-to type=inline \
+            --tag $IMAGE_NAME \
+            --push \
+            . || {
+            echo "Docker buildx build failed!"
+            exit 1
+          }
+          echo "Build and push completed successfully"
 
   get-servers:
     needs: build-and-push
@@ -60,8 +70,8 @@ jobs:
         id: get-servers
         run: |
           # Get server IPs
-          if [ -n "${{ inputs.deploy_servers }}" ]; then
-            SERVERS="${{ inputs.deploy_servers }}"
+          if [ -n "${{ github.event.inputs.deploy_servers }}" ]; then
+            SERVERS="${{ github.event.inputs.deploy_servers }}"
           else
             SERVERS=$(aws ec2 describe-instances \
               --filters "Name=tag:Role,Values=frontend" "Name=instance-state-name,Values=running" \
@@ -95,9 +105,6 @@ jobs:
     env:
       USERNAME: ${{ secrets.DOCKER_USERNAME }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -116,4 +123,10 @@ jobs:
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
           echo "Deploying frontend to $SERVER..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && export DOCKER_USERNAME=$USERNAME && sudo -E docker pull $USERNAME/ktb-chat-frontend:latest && sudo -E docker compose up -d --force-recreate"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'REMOTE_SCRIPT'
+            cd /home/ubuntu
+            sudo docker image prune -a -f
+            export DOCKER_USERNAME="$1"
+            sudo -E docker pull $DOCKER_USERNAME/ktb-chat-frontend:latest
+            sudo -E docker compose up -d --force-recreate
+          REMOTE_SCRIPT "$USERNAME"

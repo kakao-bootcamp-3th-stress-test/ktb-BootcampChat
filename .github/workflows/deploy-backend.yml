@@ -35,14 +35,16 @@ jobs:
         working-directory: apps/backend
         run: |
           set -e
-          echo "Building Docker image..."
-          docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest . || {
-            echo "Docker build failed!"
-            exit 1
-          }
-          echo "Pushing Docker image..."
-          docker push ${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest || {
-            echo "Docker push failed!"
+          IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/ktb-chat-backend:latest"
+          echo "Building and pushing Docker image with buildx..."
+          docker buildx build \
+            --platform linux/amd64 \
+            --cache-from type=registry,ref=$IMAGE_NAME \
+            --cache-to type=inline \
+            --tag $IMAGE_NAME \
+            --push \
+            . || {
+            echo "Docker buildx build failed!"
             exit 1
           }
           echo "Build and push completed successfully"
@@ -64,8 +66,8 @@ jobs:
         id: get-servers
         run: |
           # Get server IPs
-          if [ -n "${{ inputs.deploy_servers }}" ]; then
-            SERVERS="${{ inputs.deploy_servers }}"
+          if [ -n "${{ github.event.inputs.deploy_servers }}" ]; then
+            SERVERS="${{ github.event.inputs.deploy_servers }}"
           else
             SERVERS=$(aws ec2 describe-instances \
               --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
@@ -109,6 +111,8 @@ jobs:
       JWT: ${{ secrets.JWT_SECRET }}
       ENC_KEY: ${{ secrets.ENCRYPTION_KEY }}
       ENC_SALT: ${{ secrets.ENCRYPTION_SALT }}
+      FILE_S3_ACCESS_KEY: ${{ secrets.FILE_S3_ACCESS_KEY }}
+      FILE_S3_SECRET_KEY: ${{ secrets.FILE_S3_SECRET_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -131,7 +135,29 @@ jobs:
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
           echo "Copying docker-compose.yaml to $SERVER..."
-          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$SERVER:/home/ubuntu/
+          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$SERVER:/home/ubuntu/ || {
+            echo "Failed to copy docker-compose.yaml"
+            exit 1
+          }
           
           echo "Deploying backend to $SERVER..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && export DOCKER_USERNAME=$USERNAME && export MONGO_URI=$MONGO && export REDIS_HOST=$REDIS_H && export REDIS_PORT=$REDIS_P && export REDIS_SSL=$REDIS_SSL && export PUBSUB_REDIS_HOST=$PUBSUB_REDIS_H && export PUBSUB_REDIS_PORT=$PUBSUB_REDIS_P && export PUBSUB_REDIS_SSL=$PUBSUB_REDIS_SSL && export PUBSUB_REDIS_ENABLED=$PUBSUB_REDIS_ENABLED && export JWT_SECRET=$JWT && export ENCRYPTION_KEY=$ENC_KEY && export ENCRYPTION_SALT=$ENC_SALT && sudo -E docker pull $USERNAME/ktb-chat-backend:latest && sudo -E docker compose up -d --force-recreate"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'REMOTE_SCRIPT'
+            cd /home/ubuntu
+            sudo docker image prune -a -f
+            export DOCKER_USERNAME="$1"
+            export MONGO_URI="$2"
+            export REDIS_HOST="$3"
+            export REDIS_PORT="$4"
+            export REDIS_SSL="$5"
+            export PUBSUB_REDIS_HOST="$6"
+            export PUBSUB_REDIS_PORT="$7"
+            export PUBSUB_REDIS_SSL="$8"
+            export PUBSUB_REDIS_ENABLED="$9"
+            export JWT_SECRET="${10}"
+            export ENCRYPTION_KEY="${11}"
+            export ENCRYPTION_SALT="${12}"
+            export FILE_S3_ACCESS_KEY="${13}"
+            export FILE_S3_SECRET_KEY="${14}"
+            sudo -E docker pull $DOCKER_USERNAME/ktb-chat-backend:latest
+            sudo -E docker compose up -d --force-recreate
+          REMOTE_SCRIPT "$USERNAME" "$MONGO" "$REDIS_H" "$REDIS_P" "$REDIS_SSL" "$PUBSUB_REDIS_H" "$PUBSUB_REDIS_P" "$PUBSUB_REDIS_SSL" "$PUBSUB_REDIS_ENABLED" "$JWT" "$ENC_KEY" "$ENC_SALT" "$FILE_S3_ACCESS_KEY" "$FILE_S3_SECRET_KEY"

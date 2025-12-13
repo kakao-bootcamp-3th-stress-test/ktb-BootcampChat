@@ -41,7 +41,13 @@ jobs:
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.redis-pubsub.yaml ubuntu@$SERVER:/home/ubuntu/
           
           # Deploy Redis PubSub stack
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && sudo docker compose -f docker-compose.redis-pubsub.yaml down -v && sudo docker compose -f docker-compose.redis-pubsub.yaml pull && sudo docker compose -f docker-compose.redis-pubsub.yaml up -d"
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'REMOTE_SCRIPT'
+            cd /home/ubuntu
+            sudo docker image prune -a -f
+            sudo docker compose -f docker-compose.redis-pubsub.yaml down -v
+            sudo docker compose -f docker-compose.redis-pubsub.yaml pull
+            sudo docker compose -f docker-compose.redis-pubsub.yaml up -d
+          REMOTE_SCRIPT
           
           # Verify deployment
           sleep 10
