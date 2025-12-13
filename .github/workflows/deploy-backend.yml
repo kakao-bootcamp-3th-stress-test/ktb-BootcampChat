@@ -141,23 +141,23 @@ jobs:
           }
           
           echo "Deploying backend to $SERVER..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'REMOTE_SCRIPT'
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash -s << EOF
             cd /home/ubuntu
             sudo docker image prune -a -f
-            export DOCKER_USERNAME="$1"
-            export MONGO_URI="$2"
-            export REDIS_HOST="$3"
-            export REDIS_PORT="$4"
-            export REDIS_SSL="$5"
-            export PUBSUB_REDIS_HOST="$6"
-            export PUBSUB_REDIS_PORT="$7"
-            export PUBSUB_REDIS_SSL="$8"
-            export PUBSUB_REDIS_ENABLED="$9"
-            export JWT_SECRET="${10}"
-            export ENCRYPTION_KEY="${11}"
-            export ENCRYPTION_SALT="${12}"
-            export FILE_S3_ACCESS_KEY="${13}"
-            export FILE_S3_SECRET_KEY="${14}"
-            sudo -E docker pull $DOCKER_USERNAME/ktb-chat-backend:latest
+            export DOCKER_USERNAME="$USERNAME"
+            export MONGO_URI="$MONGO"
+            export REDIS_HOST="$REDIS_H"
+            export REDIS_PORT="$REDIS_P"
+            export REDIS_SSL="$REDIS_SSL"
+            export PUBSUB_REDIS_HOST="$PUBSUB_REDIS_H"
+            export PUBSUB_REDIS_PORT="$PUBSUB_REDIS_P"
+            export PUBSUB_REDIS_SSL="$PUBSUB_REDIS_SSL"
+            export PUBSUB_REDIS_ENABLED="$PUBSUB_REDIS_ENABLED"
+            export JWT_SECRET="$JWT"
+            export ENCRYPTION_KEY="$ENC_KEY"
+            export ENCRYPTION_SALT="$ENC_SALT"
+            export FILE_S3_ACCESS_KEY="$FILE_S3_ACCESS_KEY"
+            export FILE_S3_SECRET_KEY="$FILE_S3_SECRET_KEY"
+            sudo -E docker pull \$DOCKER_USERNAME/ktb-chat-backend:latest
             sudo -E docker compose up -d --force-recreate
-          REMOTE_SCRIPT "$USERNAME" "$MONGO" "$REDIS_H" "$REDIS_P" "$REDIS_SSL" "$PUBSUB_REDIS_H" "$PUBSUB_REDIS_P" "$PUBSUB_REDIS_SSL" "$PUBSUB_REDIS_ENABLED" "$JWT" "$ENC_KEY" "$ENC_SALT" "$FILE_S3_ACCESS_KEY" "$FILE_S3_SECRET_KEY"
+          EOF

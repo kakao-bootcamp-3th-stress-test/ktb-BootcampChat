@@ -123,10 +123,10 @@ jobs:
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
           echo "Deploying frontend to $SERVER..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'REMOTE_SCRIPT'
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash -s << EOF
             cd /home/ubuntu
             sudo docker image prune -a -f
-            export DOCKER_USERNAME="$1"
-            sudo -E docker pull $DOCKER_USERNAME/ktb-chat-frontend:latest
+            export DOCKER_USERNAME="$USERNAME"
+            sudo -E docker pull \$DOCKER_USERNAME/ktb-chat-frontend:latest
             sudo -E docker compose up -d --force-recreate
-          REMOTE_SCRIPT "$USERNAME"
+          EOF
