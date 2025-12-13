@@ -47,9 +47,51 @@ jobs:
           }
           echo "Build and push completed successfully"
 
-  deploy:
+  get-servers:
     needs: build-and-push
     runs-on: ubuntu-latest
+    outputs:
+      servers: ${{ steps.get-servers.outputs.servers }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Get Backend Server IPs
+        id: get-servers
+        run: |
+          # Get server IPs
+          if [ -n "${{ inputs.deploy_servers }}" ]; then
+            SERVERS="${{ inputs.deploy_servers }}"
+          else
+            SERVERS=$(aws ec2 describe-instances \
+              --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --output text | tr '\t' ' ' | xargs)
+          fi
+          
+          # Check if servers exist
+          if [ -z "$SERVERS" ] || [ "$SERVERS" = "None" ]; then
+            echo "Error: No backend servers found"
+            exit 1
+          fi
+          
+          # Convert to JSON array for matrix
+          SERVER_ARRAY=$(echo "$SERVERS" | awk '{for(i=1;i<=NF;i++) if($i!="" && $i!="None") print "\""$i"\""}' | jq -s '.')
+          
+          echo "servers=$SERVER_ARRAY" >> $GITHUB_OUTPUT
+          echo "Server IPs: $SERVERS"
+
+  deploy:
+    needs: [build-and-push, get-servers]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server: ${{ fromJson(needs.get-servers.outputs.servers) }}
+      fail-fast: false
     env:
       USERNAME: ${{ secrets.DOCKER_USERNAME }}
       MONGO: ${{ secrets.MONGO_URI }}
@@ -74,29 +116,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      - name: Get Backend Server IPs and Deploy
+      - name: Deploy to ${{ matrix.server }}
         run: |
-          # Get server IPs
-          if [ -n "${{ inputs.deploy_servers }}" ]; then
-            SERVERS="${{ inputs.deploy_servers }}"
-          else
-            SERVERS=$(aws ec2 describe-instances \
-              --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
-              --query 'Reservations[*].Instances[*].PublicIpAddress' \
-              --output text | tr '\t' ' ')
-          fi
+          SERVER="${{ matrix.server }}"
           
-          # Setup SSH
+          # Setup known hosts and deploy
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Setup known hosts, copy files and deploy
-          for server in $SERVERS; do
-            [ -n "$server" ] || continue
-            ssh-keyscan -H "$server" >> ~/.ssh/known_hosts 2>/dev/null || true
-            echo "Copying docker-compose.yaml to $server..."
-            scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$server:/home/ubuntu/
-            echo "Deploying to $server..."
-            ssh -i ~/.ssh/id_rsa ubuntu@$server "cd /home/ubuntu && sudo docker image prune -a -f && export DOCKER_USERNAME=$USERNAME && export MONGO_URI=$MONGO && export REDIS_HOST=$REDIS_H && export REDIS_PORT=$REDIS_P && export REDIS_SSL=$REDIS_SSL && export PUBSUB_REDIS_HOST=$PUBSUB_REDIS_H && export PUBSUB_REDIS_PORT=$PUBSUB_REDIS_P && export PUBSUB_REDIS_SSL=$PUBSUB_REDIS_SSL && export PUBSUB_REDIS_ENABLED=$PUBSUB_REDIS_ENABLED && export JWT_SECRET=$JWT && export ENCRYPTION_KEY=$ENC_KEY && export ENCRYPTION_SALT=$ENC_SALT && sudo -E docker pull $USERNAME/ktb-chat-backend:latest && sudo -E docker compose up -d --force-recreate"
-          done
+          echo "Copying docker-compose.yaml to $SERVER..."
+          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$SERVER:/home/ubuntu/
+          
+          echo "Deploying backend to $SERVER..."
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "cd /home/ubuntu && sudo docker image prune -a -f && export DOCKER_USERNAME=$USERNAME && export MONGO_URI=$MONGO && export REDIS_HOST=$REDIS_H && export REDIS_PORT=$REDIS_P && export REDIS_SSL=$REDIS_SSL && export PUBSUB_REDIS_HOST=$PUBSUB_REDIS_H && export PUBSUB_REDIS_PORT=$PUBSUB_REDIS_P && export PUBSUB_REDIS_SSL=$PUBSUB_REDIS_SSL && export PUBSUB_REDIS_ENABLED=$PUBSUB_REDIS_ENABLED && export JWT_SECRET=$JWT && export ENCRYPTION_KEY=$ENC_KEY && export ENCRYPTION_SALT=$ENC_SALT && sudo -E docker pull $USERNAME/ktb-chat-backend:latest && sudo -E docker compose up -d --force-recreate"
