@@ -49,11 +49,11 @@ jobs:
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --output text | tr -d '\t\n')
 
-          # Redis (Role=redis)
-          REDIS_IP=$(aws ec2 describe-instances \
+          # Redis 서버들 (Role=redis)
+          REDIS_IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Role,Values=redis" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
-            --output text | tr -d '\t\n')
+            --output text | tr '\t' '\n' | grep -v '^$')
 
           # spring-boot.prod.yml (Backend - Actuator metrics)
           echo "# Auto-generated - Backend servers" > apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
@@ -89,15 +89,17 @@ jobs:
               cluster: 'mongodb'
           EOF
 
-          # redis.prod.yml
-          cat > apps/backend/monitoring/prometheus/targets/redis.prod.yml << EOF
-          # Auto-generated - Redis server
-          - targets: ['${REDIS_IP}:9121']
+          # redis.prod.yml (Redis Exporters)
+          echo "# Auto-generated - Redis servers" > apps/backend/monitoring/prometheus/targets/redis.prod.yml
+          for ip in $REDIS_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/redis.prod.yml << EOF
+          - targets: ['${ip}:9121']
             labels:
               environment: 'production'
               service: 'redis'
               cluster: 'redis'
           EOF
+          done
 
           # node-exporters.prod.yml (모든 서버의 Node Exporter)
           echo "# Auto-generated - Node Exporters" > apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
@@ -123,12 +125,16 @@ jobs:
               environment: 'production'
               cluster: 'mongodb'
               service: 'mongodb'
-          - targets: ['${REDIS_IP}:9100']
+          EOF
+          for ip in $REDIS_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${ip}:9100']
             labels:
               environment: 'production'
               cluster: 'redis'
               service: 'redis'
           EOF
+          done
 
           # Observer 서버 (Role=observer)
           OBSERVER_IP=$(aws ec2 describe-instances \
