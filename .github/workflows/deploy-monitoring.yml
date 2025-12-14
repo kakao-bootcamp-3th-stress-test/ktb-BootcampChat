@@ -63,6 +63,7 @@ jobs:
             labels:
               application: 'ktb-chat-backend'
               environment: 'production'
+              cluster: 'backend'
           EOF
           done
 
@@ -74,6 +75,7 @@ jobs:
             labels:
               application: 'ktb-chat-frontend'
               environment: 'production'
+              cluster: 'frontend'
           EOF
           done
 
@@ -84,6 +86,7 @@ jobs:
             labels:
               environment: 'production'
               service: 'mongodb'
+              cluster: 'mongodb'
           EOF
 
           # redis.prod.yml
@@ -93,6 +96,7 @@ jobs:
             labels:
               environment: 'production'
               service: 'redis'
+              cluster: 'redis'
           EOF
 
           # node-exporters.prod.yml (모든 서버의 Node Exporter)
@@ -117,13 +121,27 @@ jobs:
           - targets: ['${MONGODB_IP}:9100']
             labels:
               environment: 'production'
-              cluster: 'database'
+              cluster: 'mongodb'
               service: 'mongodb'
           - targets: ['${REDIS_IP}:9100']
             labels:
               environment: 'production'
-              cluster: 'database'
+              cluster: 'redis'
               service: 'redis'
+          EOF
+
+          # Observer 서버 (Role=observer)
+          OBSERVER_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Role,Values=observer" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --output text | tr -d '\t\n')
+
+          # Observer 서버 Node Exporter 추가
+          cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${OBSERVER_IP}:9100']
+            labels:
+              environment: 'production'
+              cluster: 'observer'
           EOF
 
           echo "Generated target files:"
