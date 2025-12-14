@@ -1,0 +1,18 @@
+{
+  "name": "k6-load-test",
+  "version": "1.0.0",
+  "description": "k6 부하 테스트 스크립트",
+  "scripts": {
+    "test": "k6 run main.js",
+    "test-auth": "k6 run scenarios/auth.scenario.js",
+    "test-chat": "k6 run scenarios/chat.scenario.js",
+    "test-profile": "k6 run scenarios/profile.scenario.js",
+    "test-all": "k6 run main.js",
+    "test-stress": "k6 run scenarios/stress.scenario.js",
+    "test-load": "k6 run scenarios/load.scenario.js"
+  },
+  "keywords": ["k6", "load-test", "performance"],
+  "author": "",
+  "license": "ISC"
+}
+

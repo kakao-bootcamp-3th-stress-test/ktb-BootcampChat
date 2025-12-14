@@ -23,17 +23,31 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      - name: Get Redis Main Server IP and Deploy
+      - name: Create .env file from secret
         run: |
-          # Get server IP
+          echo "${{ secrets.ENV_REDIS }}" > /tmp/.env.redis
+          echo "Redis .env file created"
+
+      - name: Get Redis Server IP and Deploy
+        run: |
+          # Get Redis server IP (ktb-redis-1)
           SERVER=$(aws ec2 describe-instances \
-            --filters "Name=tag:Role,Values=database" "Name=tag:Service,Values=redis-main" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Service,Values=redis" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --output text | head -n1 | tr -d '[:space:]')
           
           # Validate server IP
-          if [ -z "$SERVER" ]; then
-            echo "Error: No Redis server found with the specified tags"
+          if [ -z "$SERVER" ] || [ "$SERVER" = "None" ]; then
+            echo "Error: No Redis server found"
+            echo "Checking tag:Name=ktb-redis-1..."
+            SERVER=$(aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=ktb-redis-1" "Name=instance-state-name,Values=running" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --output text | head -n1 | tr -d '[:space:]')
+          fi
+          
+          if [ -z "$SERVER" ] || [ "$SERVER" = "None" ]; then
+            echo "Error: No Redis server found with any tags"
             exit 1
           fi
           
@@ -45,19 +59,38 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Copy docker-compose file
+          # Copy files
+          echo "Copying docker-compose and .env files..."
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.redis.yaml ubuntu@$SERVER:/home/ubuntu/
+          scp -i ~/.ssh/id_rsa /tmp/.env.redis ubuntu@$SERVER:/home/ubuntu/.env
           
-          # Deploy Redis stack
+          # Deploy Redis
+          echo "Deploying Redis container..."
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'REMOTE_SCRIPT'
             cd /home/ubuntu
+            
+            # Stop and remove old containers
+            sudo docker compose -f docker-compose.redis.yaml down -v 2>/dev/null || true
+            
+            # Clean up images
             sudo docker image prune -a -f
-            sudo docker compose -f docker-compose.redis.yaml down -v
-            sudo docker compose -f docker-compose.redis.yaml pull
+            
+            # Start Redis with docker-compose (uses .env file automatically)
             sudo docker compose -f docker-compose.redis.yaml up -d
+            
+            echo "Waiting for Redis to start..."
+            sleep 10
+            
+            # Check Redis health
+            if sudo docker exec redis-ktb redis-cli ping | grep -q "PONG"; then
+              echo "✅ Redis is healthy!"
+            else
+              echo "❌ Redis health check failed!"
+              sudo docker logs redis-ktb
+              exit 1
+            fi
           REMOTE_SCRIPT
           
           # Verify deployment
-          sleep 10
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=redis' --filter 'name=redis-exporter' --format 'table {{.Names}}\t{{.Status}}'"
-
+          echo "Verifying deployment..."
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=redis' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"

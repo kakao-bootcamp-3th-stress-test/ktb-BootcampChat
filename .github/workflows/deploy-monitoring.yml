@@ -31,29 +31,37 @@ jobs:
         run: |
           mkdir -p apps/backend/monitoring/prometheus/targets
 
-          # Backend 서버들 (Role=backend)
+          # Backend 서버들 (Service=rest-api, socketio) - Private IP 사용
           BACKEND_IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --query 'Reservations[*].Instances[*].PrivateIpAddress' \
             --output text | tr '\t' '\n' | grep -v '^$')
 
-          # Frontend 서버들 (Role=frontend)
+          # Frontend 서버들 (Role=frontend) - Private IP 사용
           FRONTEND_IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Role,Values=frontend" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --query 'Reservations[*].Instances[*].PrivateIpAddress' \
             --output text | tr '\t' '\n' | grep -v '^$')
 
-          # MongoDB (Role=mongodb)
-          MONGODB_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Role,Values=mongodb" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
-            --output text | tr -d '\t\n')
+          # MongoDB (Service=mongodb) - Private IP 사용
+          MONGODB_IPS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[*].Instances[*].PrivateIpAddress' \
+            --output text | tr '\t' '\n' | grep -v '^$')
 
+<<<<<<< Updated upstream
           # Redis 서버들 (Role=redis)
           REDIS_IPS=$(aws ec2 describe-instances \
             --filters "Name=tag:Role,Values=redis" "Name=instance-state-name,Values=running" \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --output text | tr '\t' '\n' | grep -v '^$')
+=======
+          # Redis (Service=redis) - Private IP 사용
+          REDIS_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=redis" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+            --output text)
+>>>>>>> Stashed changes
 
           # spring-boot.prod.yml (Backend - Actuator metrics)
           echo "# Auto-generated - Backend servers" > apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
@@ -79,15 +87,17 @@ jobs:
           EOF
           done
 
-          # mongodb.prod.yml
-          cat > apps/backend/monitoring/prometheus/targets/mongodb.prod.yml << EOF
-          # Auto-generated - MongoDB server
-          - targets: ['${MONGODB_IP}:9216']
+          # mongodb.prod.yml (MongoDB Exporter - 3대)
+          echo "# Auto-generated - MongoDB servers" > apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
+          for ip in $MONGODB_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml << EOF
+          - targets: ['${ip}:9216']
             labels:
               environment: 'production'
               service: 'mongodb'
               cluster: 'mongodb'
           EOF
+          done
 
           # redis.prod.yml (Redis Exporters)
           echo "# Auto-generated - Redis servers" > apps/backend/monitoring/prometheus/targets/redis.prod.yml
@@ -119,16 +129,23 @@ jobs:
               cluster: 'frontend'
           EOF
           done
-          cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${MONGODB_IP}:9100']
+          for ip in $MONGODB_IPS; do
+            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${ip}:9100']
             labels:
               environment: 'production'
               cluster: 'mongodb'
               service: 'mongodb'
           EOF
+<<<<<<< Updated upstream
           for ip in $REDIS_IPS; do
             cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
           - targets: ['${ip}:9100']
+=======
+          done
+          cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
+          - targets: ['${REDIS_IP}:9100']
+>>>>>>> Stashed changes
             labels:
               environment: 'production'
               cluster: 'redis'
@@ -153,13 +170,15 @@ jobs:
           echo "Generated target files:"
           ls -la apps/backend/monitoring/prometheus/targets/
 
-      - name: Get Observer Server IP and Deploy
+      - name: Deploy to ktb-chat-observer
         run: |
-          # Get server IP
+          # Get ktb-chat-observer server IP
           SERVER=$(aws ec2 describe-instances \
-            --filters "Name=tag:Role,Values=observer" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Name,Values=ktb-chat-observer" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
             --output text)
+          
+          echo "Deploying to ktb-chat-observer: $SERVER"
 
           # Setup SSH
           mkdir -p ~/.ssh

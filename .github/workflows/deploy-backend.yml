@@ -98,21 +98,6 @@ jobs:
       matrix:
         server: ${{ fromJson(needs.get-servers.outputs.servers) }}
       fail-fast: false
-    env:
-      USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      MONGO: ${{ secrets.MONGO_URI }}
-      REDIS_H: ${{ secrets.REDIS_HOST }}
-      REDIS_P: ${{ secrets.REDIS_PORT }}
-      REDIS_SSL: ${{ secrets.REDIS_SSL }}
-      PUBSUB_REDIS_H: ${{ secrets.PUBSUB_REDIS_HOST }}
-      PUBSUB_REDIS_P: ${{ secrets.PUBSUB_REDIS_PORT }}
-      PUBSUB_REDIS_SSL: ${{ secrets.PUBSUB_REDIS_SSL }}
-      PUBSUB_REDIS_ENABLED: ${{ secrets.PUBSUB_REDIS_ENABLED }}
-      JWT: ${{ secrets.JWT_SECRET }}
-      ENC_KEY: ${{ secrets.ENCRYPTION_KEY }}
-      ENC_SALT: ${{ secrets.ENCRYPTION_SALT }}
-      FILE_S3_ACCESS_KEY: ${{ secrets.FILE_S3_ACCESS_KEY }}
-      FILE_S3_SECRET_KEY: ${{ secrets.FILE_S3_SECRET_KEY }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -124,6 +109,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
+      - name: Create .env file from secret
+        run: |
+          echo "${{ secrets.ENV_BACKEND }}" > /tmp/.env
+          echo ".env file created from ENV_BACKEND secret"
+
       - name: Deploy to ${{ matrix.server }}
         run: |
           SERVER="${{ matrix.server }}"
@@ -134,37 +124,31 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          echo "Copying docker-compose.yaml to $SERVER..."
+          echo "Copying files to $SERVER..."
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.yaml ubuntu@$SERVER:/home/ubuntu/ || {
             echo "Failed to copy docker-compose.yaml"
             exit 1
           }
           
+          scp -i ~/.ssh/id_rsa /tmp/.env ubuntu@$SERVER:/home/ubuntu/.env || {
+            echo "Failed to copy .env file"
+            exit 1
+          }
+          
           echo "Deploying backend to $SERVER..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash -s << EOF
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'EOF'
             cd /home/ubuntu
-            sudo docker image prune -a -f
-            export DOCKER_USERNAME="$USERNAME"
-            export MONGO_URI="$MONGO"
-            export REDIS_HOST="$REDIS_H"
-            export REDIS_PORT="$REDIS_P"
-            export REDIS_SSL="$REDIS_SSL"
-            export PUBSUB_REDIS_HOST="$PUBSUB_REDIS_H"
-            export PUBSUB_REDIS_PORT="$PUBSUB_REDIS_P"
-            export PUBSUB_REDIS_SSL="$PUBSUB_REDIS_SSL"
-            export PUBSUB_REDIS_ENABLED="$PUBSUB_REDIS_ENABLED"
-            # Automatically set queue mode based on PUBSUB_REDIS_ENABLED
-            if [ "$PUBSUB_REDIS_ENABLED" = "true" ]; then
-              export CHAT_MESSAGE_QUEUE_MODE="redis"
-            else
-              export CHAT_MESSAGE_QUEUE_MODE="default"
+            
+            # Load .env file
+            if [ -f .env ]; then
+              export $(grep -v '^#' .env | xargs)
             fi
-            export JWT_SECRET="$JWT"
-            export ENCRYPTION_KEY="$ENC_KEY"
-            export ENCRYPTION_SALT="$ENC_SALT"
-            export FILE_S3_ACCESS_KEY="$FILE_S3_ACCESS_KEY"
-            export FILE_S3_SECRET_KEY="$FILE_S3_SECRET_KEY"
-            sudo -E docker pull \$DOCKER_USERNAME/ktb-chat-backend:latest
+            
+            # Clean up old images
+            sudo docker image prune -a -f
+            
+            # Pull and restart
+            sudo -E docker pull $DOCKER_USERNAME/ktb-chat-backend:latest
             sudo -E docker compose up -d --force-recreate
             
             echo "Waiting for container to start..."

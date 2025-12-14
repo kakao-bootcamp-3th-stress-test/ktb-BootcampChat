@@ -2,32 +2,39 @@ version: '3.8'
 
 services:
   redis:
-    image: redis:7.2
+    image: redis:7.2-alpine
     container_name: redis-ktb
     restart: unless-stopped
+    command: >
+      redis-server
+      --bind 0.0.0.0
+      --port 6379
+      --maxmemory ${REDIS_MAX_MEMORY}
+      --maxmemory-policy allkeys-lru
+      --maxclients 10000
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - redis-network
-
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.66.0
-    container_name: redis-exporter
-    restart: unless-stopped
-    ports:
-      - "9121:9121"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
-      - REDIS_ADDR=redis://redis:6379
-    depends_on:
-      - redis
-    networks:
-      - redis-network
+      - TZ=Asia/Seoul
+
+volumes:
+  redis_data:
+    driver: local
 
 networks:
   redis-network:
     driver: bridge
-
-volumes:
-  redis_data:
