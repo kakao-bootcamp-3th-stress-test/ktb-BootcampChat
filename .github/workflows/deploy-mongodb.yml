@@ -89,19 +89,6 @@ jobs:
               export $(grep -v '^#' .env | xargs)
             fi
             
-            # Create MongoDB keyfile for Replica Set authentication
-            # Use secret if available, otherwise generate new one
-            # Ensure single line format (no newlines) for MongoDB compatibility
-            mkdir -p mongodb-keyfile
-            if [ -n "${{ secrets.MONGO_KEYFILE }}" ]; then
-              echo -n "${{ secrets.MONGO_KEYFILE }}" | tr -d '\n' > mongodb-keyfile/keyfile
-            else
-              openssl rand -base64 512 | tr -d '\n' > mongodb-keyfile/keyfile
-            fi
-            # Set ownership to mongod user (999:999) and permissions to 400
-            sudo chown 999:999 mongodb-keyfile/keyfile
-            sudo chmod 400 mongodb-keyfile/keyfile
-            
             sudo docker image prune -a -f
             sudo -E docker compose -f docker-compose.mongodb.yaml up -d
             
@@ -110,13 +97,13 @@ jobs:
             
             # Initialize Replica Set (Primary only)
             echo "Initializing Replica Set..."
-            sudo docker exec mongodb-primary mongosh --username admin --password bootcamp-chat --authenticationDatabase admin --eval "
+            sudo docker exec mongodb-primary mongosh --eval "
               try {
                 rs.status();
                 print('Replica Set already initialized');
               } catch(e) {
                 rs.initiate({
-                  _id: 'ktb-replica-set',
+                  _id: 'rs0',
                   members: [
                     { _id: 0, host: '10.0.101.54:27017', priority: 2 }
                   ]
@@ -216,19 +203,9 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Get Primary IP to copy keyfile
-          PRIMARY_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=primary" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].PublicIpAddress' \
-            --output text)
-          
           # Copy files
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.mongodb.yaml ubuntu@$SERVER:/home/ubuntu/
           scp -i ~/.ssh/id_rsa /tmp/.env.mongodb ubuntu@$SERVER:/home/ubuntu/.env
-          
-          # Create keyfile on Secondary (always copy from Primary to ensure consistency)
-          echo "Copying keyfile from Primary ($PRIMARY_IP) to Secondary ($SERVER)..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_IP "cat /home/ubuntu/mongodb-keyfile/keyfile" | ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && rm -f /home/ubuntu/mongodb-keyfile/keyfile && tr -d '\n' > /home/ubuntu/mongodb-keyfile/keyfile.tmp && sudo mv /home/ubuntu/mongodb-keyfile/keyfile.tmp /home/ubuntu/mongodb-keyfile/keyfile && sudo chown 999:999 /home/ubuntu/mongodb-keyfile/keyfile && sudo chmod 400 /home/ubuntu/mongodb-keyfile/keyfile && echo '✅ keyFile copied from Primary'"
           
           # Deploy MongoDB Secondary
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'EOF'
@@ -264,14 +241,14 @@ jobs:
           # Add Primary to known_hosts
           ssh-keyscan -H "$PRIMARY_PUBLIC" >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Check if Secondary is already in Replica Set before adding
-          echo "Checking if Secondary $SECONDARY_PRIVATE_IP is already in Replica Set..."
-          MEMBER_EXISTS=$(ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_PUBLIC "sudo docker exec mongodb-primary mongosh --username admin --password bootcamp-chat --authenticationDatabase admin --quiet --eval \"rs.status().members.some(m => m.name === '$SECONDARY_PRIVATE_IP:27017')\" 2>&1" | grep -E "true|false" | head -1)
-          
-          if [ "$MEMBER_EXISTS" = "true" ]; then
-            echo "✅ Secondary $SECONDARY_PRIVATE_IP is already in Replica Set, skipping add"
-          else
-            echo "Adding Secondary $SECONDARY_PRIVATE_IP to Replica Set..."
-            ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_PUBLIC "sudo docker exec mongodb-primary mongosh --username admin --password bootcamp-chat --authenticationDatabase admin --eval \"rs.add('$SECONDARY_PRIVATE_IP:27017')\" || echo 'Failed to add Secondary (may already exist)'"
-          fi
+            # Check if Secondary is already in Replica Set before adding
+            echo "Checking if Secondary $SECONDARY_PRIVATE_IP is already in Replica Set..."
+            MEMBER_EXISTS=$(ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_PUBLIC "sudo docker exec mongodb-primary mongosh --quiet --eval \"rs.status().members.some(m => m.name === '$SECONDARY_PRIVATE_IP:27017')\" 2>&1" | grep -E "true|false" | head -1)
+            
+            if [ "$MEMBER_EXISTS" = "true" ]; then
+              echo "✅ Secondary $SECONDARY_PRIVATE_IP is already in Replica Set, skipping add"
+            else
+              echo "Adding Secondary $SECONDARY_PRIVATE_IP to Replica Set..."
+              ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_PUBLIC "sudo docker exec mongodb-primary mongosh --eval \"rs.add('$SECONDARY_PRIVATE_IP:27017')\" || echo 'Failed to add Secondary (may already exist)'"
+            fi
 

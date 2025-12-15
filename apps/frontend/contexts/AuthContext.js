@@ -63,6 +63,24 @@ export const AuthProvider = ({ children }) => {
       credentials: "include"
     });
 
+    // 응답 상태 코드 확인
+    if (!response.ok) {
+      // 401이나 다른 에러 상태일 때
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          const data = await response.json();
+          throw new Error(data.message || "Token validation failed");
+        } catch (e) {
+          // JSON 파싱 실패 시 기본 에러 메시지
+          throw new Error("Token validation failed");
+        }
+      } else {
+        // 응답 body가 없는 경우
+        throw new Error("Token validation failed");
+      }
+    }
+
     const data = await response.json();
     if (!data.success) {
       throw new Error(data.message || "Token validation failed");
@@ -282,6 +300,21 @@ export const AuthProvider = ({ children }) => {
         },
         credentials: "include"
       });
+
+      // 응답 상태 코드 확인
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const data = await response.json();
+            throw new Error(data.message || "Token validation failed");
+          } catch (e) {
+            throw new Error("Token validation failed");
+          }
+        } else {
+          throw new Error("Token validation failed");
+        }
+      }
 
       const data = await response.json();
 

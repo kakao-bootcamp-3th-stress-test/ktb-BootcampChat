@@ -1,37 +1,19 @@
-version: '3.8'
-
 services:
   mongodb:
-    image: mongo:7.0
+    image: mongo:8.2
     container_name: mongodb-${MONGO_ROLE:-primary}
     restart: unless-stopped
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
-      - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
-      - ./mongodb-keyfile/keyfile:/etc/mongodb-keyfile/keyfile:ro
-    command: 
-      - --replSet
-      - ${MONGO_REPLICA_SET}
-      - --bind_ip_all
-      - --keyFile
-      - /etc/mongodb-keyfile/keyfile
-      - --oplogSize
-      - "2048"
-      - --wiredTigerCacheSizeGB
-      - "1"
+    command: >
+      mongod
+      --replSet rs0
+      --bind_ip_all
     networks:
       - mongodb-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   node-exporter:
     image: prom/node-exporter:v1.8.2

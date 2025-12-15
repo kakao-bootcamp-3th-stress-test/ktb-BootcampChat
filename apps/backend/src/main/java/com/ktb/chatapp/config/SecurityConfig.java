@@ -68,6 +68,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/health",
+                                "/api/rooms/health",
                                 "/api/auth/**",
                                 "/api/v3/api-docs/**",
                                 "/api/swagger-ui/**",
@@ -82,8 +83,16 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 // Spring Security 6 OAuth2 Resource Server 설정
+                // /api/auth/** 경로는 permitAll()이므로 JWT 검증을 건너뛰도록 설정
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(request -> {
+                            // /api/auth/** 경로에서는 토큰을 반환하지 않아 JWT 검증을 건너뜀
+                            // 이 경로는 permitAll()로 설정되어 있으므로 인증이 필요 없음
+                            String uri = request.getRequestURI();
+                            if (uri != null && uri.startsWith("/api/auth/")) {
+                                log.debug("Skipping token resolution for /api/auth/** path: {}", uri);
+                                return null;
+                            }
                             String token = bearerTokenResolver.resolve(request);
                             log.info("BearerTokenResolver resolved token: {}", token != null ? "YES (length: " + token.length() + ")" : "NO");
                             return token;
