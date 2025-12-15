@@ -120,9 +120,9 @@ jobs:
             
             # Check Redis health
             if sudo docker exec redis-ktb redis-cli ping | grep -q "PONG"; then
-              echo "✅ Redis is healthy!"
+              echo "Redis is healthy!"
             else
-              echo "❌ Redis health check failed!"
+              echo "Redis health check failed!"
               sudo docker logs redis-ktb
               exit 1
             fi

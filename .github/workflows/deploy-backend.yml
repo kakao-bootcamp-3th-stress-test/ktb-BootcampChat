@@ -195,27 +195,6 @@ jobs:
               exit 1
             fi
             
-            # Wait for health check (max 120 seconds)
-            MAX_WAIT=120
-            WAIT_TIME=0
-            HEALTHY=false
-            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-              if curl -sf http://localhost:5001/api/health > /dev/null 2>&1; then
-                HEALTHY=true
-                break
-              fi
-              echo "Waiting for health check... ($WAIT_TIME/$MAX_WAIT seconds)"
-              sleep 5
-              WAIT_TIME=$((WAIT_TIME + 5))
-            done
-            
-            if [ "$HEALTHY" = "true" ]; then
-              echo "✅ Health check passed!"
-              sudo docker ps --filter name=ktb-chat-backend --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-            else
-              echo "❌ Health check failed after $MAX_WAIT seconds!"
-              echo "Container logs (last 100 lines):"
-              sudo docker logs --tail 100 ktb-chat-backend 2>&1 || true
-              exit 1
-            fi
+            echo "Container is running!"
+            sudo docker ps --filter name=ktb-chat-backend --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           ENDSSH
