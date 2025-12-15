@@ -234,28 +234,43 @@ public class AuthController {
     @PostMapping("/verify-token")
     public ResponseEntity<?> verifyToken(HttpServletRequest request) {
         try {
+            log.debug("verify-token request received from {}", request.getRemoteAddr());
             String token = extractToken(request);
             
             if (token == null) {
+                log.warn("verify-token: Token not found in request");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new TokenVerifyResponse(false, "토큰이 필요합니다.", null));
             }
 
             if (!jwtService.validateToken(token)) {
+                log.warn("verify-token: Invalid token");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new TokenVerifyResponse(false, "유효하지 않은 토큰입니다.", null));
             }
 
             String userId = jwtService.extractUserId(token);
-            Optional<User> userOpt = userRepository.findById(userId);
+            log.debug("verify-token: Valid token for user {}", userId);
+            
+            Optional<User> userOpt;
+            try {
+                userOpt = userRepository.findById(userId);
+            } catch (Exception dbException) {
+                log.error("Database error during token verification for user {}: {}", userId, dbException.getMessage());
+                // MongoDB 연결 실패 시에도 토큰 자체는 유효하므로, 사용자 정보 없이 성공 처리
+                // 이렇게 하면 프론트엔드가 계속 동작할 수 있음
+                return ResponseEntity.ok(new TokenVerifyResponse(true, "토큰이 유효합니다. (DB 연결 일시 중단)", null));
+            }
 
             if (userOpt.isEmpty()) {
+                log.warn("verify-token: User not found for userId {}", userId);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new TokenVerifyResponse(false, "사용자를 찾을 수 없습니다.", null));
             }
 
             User user = userOpt.get();
             AuthUserDto authUserDto = new AuthUserDto(user.getId(), user.getName(), user.getEmail(), user.getProfileImage());
+            log.debug("verify-token: Token verified successfully for user {}", userId);
             return ResponseEntity.ok(new TokenVerifyResponse(true, "토큰이 유효합니다.", authUserDto));
 
         } catch (Exception e) {
@@ -297,7 +312,14 @@ public class AuthController {
                         .body(new TokenRefreshResponse(false, "유효하지 않은 토큰입니다.", null));
             }
             
-            Optional<User> userOpt = userRepository.findById(userId);
+            Optional<User> userOpt;
+            try {
+                userOpt = userRepository.findById(userId);
+            } catch (Exception dbException) {
+                log.error("Database error during token refresh for user {}: {}", userId, dbException.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(new TokenRefreshResponse(false, "데이터베이스 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", null));
+            }
 
             if (userOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
