@@ -89,6 +89,16 @@ jobs:
               export $(grep -v '^#' .env | xargs)
             fi
             
+            # Create MongoDB keyfile for Replica Set authentication
+            # Use secret if available, otherwise generate new one
+            mkdir -p mongodb-keyfile
+            if [ -n "${{ secrets.MONGO_KEYFILE }}" ]; then
+              echo "${{ secrets.MONGO_KEYFILE }}" > mongodb-keyfile/keyfile
+            else
+              openssl rand -base64 756 > mongodb-keyfile/keyfile
+            fi
+            chmod 400 mongodb-keyfile/keyfile
+            
             sudo docker image prune -a -f
             sudo -E docker compose -f docker-compose.mongodb.yaml up -d
             
@@ -203,9 +213,24 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
+          # Get Primary IP to copy keyfile
+          PRIMARY_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=primary" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          
           # Copy files
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.mongodb.yaml ubuntu@$SERVER:/home/ubuntu/
           scp -i ~/.ssh/id_rsa /tmp/.env.mongodb ubuntu@$SERVER:/home/ubuntu/.env
+          
+          # Create keyfile on Secondary (use secret or copy from Primary)
+          if [ -n "${{ secrets.MONGO_KEYFILE }}" ]; then
+            # Use secret if available
+            ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && echo '${{ secrets.MONGO_KEYFILE }}' > /home/ubuntu/mongodb-keyfile/keyfile && chmod 400 /home/ubuntu/mongodb-keyfile/keyfile"
+          else
+            # Copy from Primary if secret not available
+            ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_IP "cat /home/ubuntu/mongodb-keyfile/keyfile" | ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && cat > /home/ubuntu/mongodb-keyfile/keyfile && chmod 400 /home/ubuntu/mongodb-keyfile/keyfile"
+          fi
           
           # Deploy MongoDB Secondary
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'EOF'

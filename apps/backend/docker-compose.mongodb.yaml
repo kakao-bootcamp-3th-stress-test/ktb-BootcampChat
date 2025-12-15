@@ -14,10 +14,13 @@ services:
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
+      - ./mongodb-keyfile/keyfile:/etc/mongodb-keyfile/keyfile:ro
     command: 
       - --replSet
       - ${MONGO_REPLICA_SET}
       - --bind_ip_all
+      - --keyFile
+      - /etc/mongodb-keyfile/keyfile
       - --oplogSize
       - "2048"
       - --wiredTigerCacheSizeGB
