@@ -49,19 +49,11 @@ jobs:
             --query 'Reservations[*].Instances[*].PrivateIpAddress' \
             --output text | tr '\t' '\n' | grep -v '^$')
 
-<<<<<<< Updated upstream
-          # Redis 서버들 (Role=redis)
-          REDIS_IPS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Role,Values=redis" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
-            --output text | tr '\t' '\n' | grep -v '^$')
-=======
           # Redis (Service=redis) - Private IP 사용
           REDIS_IP=$(aws ec2 describe-instances \
             --filters "Name=tag:Service,Values=redis" "Name=instance-state-name,Values=running" \
             --query 'Reservations[0].Instances[0].PrivateIpAddress' \
             --output text)
->>>>>>> Stashed changes
 
           # spring-boot.prod.yml (Backend - Actuator metrics)
           echo "# Auto-generated - Backend servers" > apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
@@ -99,17 +91,15 @@ jobs:
           EOF
           done
 
-          # redis.prod.yml (Redis Exporters)
-          echo "# Auto-generated - Redis servers" > apps/backend/monitoring/prometheus/targets/redis.prod.yml
-          for ip in $REDIS_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/redis.prod.yml << EOF
-          - targets: ['${ip}:9121']
+          # redis.prod.yml
+          cat > apps/backend/monitoring/prometheus/targets/redis.prod.yml << EOF
+          # Auto-generated - Redis server
+          - targets: ['${REDIS_IP}:9121']
             labels:
               environment: 'production'
               service: 'redis'
               cluster: 'redis'
           EOF
-          done
 
           # node-exporters.prod.yml (모든 서버의 Node Exporter)
           echo "# Auto-generated - Node Exporters" > apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
@@ -137,21 +127,14 @@ jobs:
               cluster: 'mongodb'
               service: 'mongodb'
           EOF
-<<<<<<< Updated upstream
-          for ip in $REDIS_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${ip}:9100']
-=======
           done
           cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
           - targets: ['${REDIS_IP}:9100']
->>>>>>> Stashed changes
             labels:
               environment: 'production'
               cluster: 'redis'
               service: 'redis'
           EOF
-          done
 
           # Observer 서버 (Role=observer)
           OBSERVER_IP=$(aws ec2 describe-instances \
@@ -179,6 +162,23 @@ jobs:
             --output text)
           
           echo "Deploying to ktb-chat-observer: $SERVER"
+          
+          # Check if Docker is installed
+          DOCKER_EXISTS=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@$SERVER 'command -v docker >/dev/null && echo "true" || echo "false"')
+          
+          if [ "$DOCKER_EXISTS" = "false" ]; then
+            echo "Installing Docker on $SERVER..."
+            ssh -i ~/.ssh/id_rsa ubuntu@$SERVER << 'DOCKER_INSTALL'
+              sudo apt-get update
+              sudo apt-get install -y ca-certificates curl gnupg lsb-release
+              sudo mkdir -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+              sudo usermod -aG docker ubuntu
+          DOCKER_INSTALL
+          fi
 
           # Setup SSH
           mkdir -p ~/.ssh

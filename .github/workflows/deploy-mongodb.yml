@@ -28,6 +28,38 @@ jobs:
           echo "${{ secrets.ENV_MONGODB }}" > /tmp/.env.mongodb
           echo "MongoDB Primary .env file created"
 
+      - name: Check if Docker is installed (Primary)
+        id: check-docker-primary
+        run: |
+          SERVER=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=primary" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          DOCKER_EXISTS=$(ssh -i ~/.ssh/id_rsa ubuntu@$SERVER 'command -v docker >/dev/null && echo "true" || echo "false"')
+          echo "docker_exists=$DOCKER_EXISTS" >> $GITHUB_OUTPUT
+          echo "server=$SERVER" >> $GITHUB_OUTPUT
+
+      - name: Install Docker on Primary
+        if: steps.check-docker-primary.outputs.docker_exists == 'false'
+        run: |
+          SERVER=${{ steps.check-docker-primary.outputs.server }}
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER << 'EOF'
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl gnupg lsb-release
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            sudo usermod -aG docker ubuntu
+          EOF
+
       - name: Deploy MongoDB Primary
         run: |
           # Get Primary server IP
@@ -85,9 +117,46 @@ jobs:
 
       - name: Create .env file for Secondary
         run: |
-          # Modify MONGO_ROLE to secondary
           echo "${{ secrets.ENV_MONGODB }}" | sed 's/MONGO_ROLE=primary/MONGO_ROLE=secondary/' > /tmp/.env.mongodb
-          echo "MongoDB Secondary .env file created"
+
+      - name: Check if Docker is installed (Secondary)
+        id: check-docker-secondary
+        run: |
+          SERVERS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=secondary" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].PublicIpAddress' \
+            --output text)
+          
+          SERVERS_ARRAY=($SERVERS)
+          if [ "${{ matrix.name }}" = "secondary-1" ]; then
+            SERVER="${SERVERS_ARRAY[0]}"
+          else
+            SERVER="${SERVERS_ARRAY[1]}"
+          fi
+          
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          DOCKER_EXISTS=$(ssh -i ~/.ssh/id_rsa ubuntu@$SERVER 'command -v docker >/dev/null && echo "true" || echo "false"')
+          echo "docker_exists=$DOCKER_EXISTS" >> $GITHUB_OUTPUT
+          echo "server=$SERVER" >> $GITHUB_OUTPUT
+
+      - name: Install Docker on Secondary
+        if: steps.check-docker-secondary.outputs.docker_exists == 'false'
+        run: |
+          SERVER=${{ steps.check-docker-secondary.outputs.server }}
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER << 'EOF'
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl gnupg lsb-release
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            sudo usermod -aG docker ubuntu
+          EOF
 
       - name: Deploy MongoDB Secondary ${{ matrix.name }}
         run: |

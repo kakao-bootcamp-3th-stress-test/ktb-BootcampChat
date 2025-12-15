@@ -114,6 +114,36 @@ jobs:
           echo "${{ secrets.ENV_BACKEND }}" > /tmp/.env
           echo ".env file created from ENV_BACKEND secret"
 
+      - name: Check if Docker is installed
+        id: check-docker
+        run: |
+          SERVER="${{ matrix.server }}"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          DOCKER_EXISTS=$(ssh -i ~/.ssh/id_rsa ubuntu@$SERVER 'command -v docker >/dev/null && echo "true" || echo "false"')
+          echo "docker_exists=$DOCKER_EXISTS" >> $GITHUB_OUTPUT
+          echo "Docker exists on $SERVER: $DOCKER_EXISTS"
+
+      - name: Install Docker on EC2
+        if: steps.check-docker.outputs.docker_exists == 'false'
+        run: |
+          SERVER="${{ matrix.server }}"
+          echo "Installing Docker on $SERVER..."
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER << 'EOF'
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl gnupg lsb-release
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            sudo usermod -aG docker ubuntu
+            echo "Docker installed successfully"
+          EOF
+
       - name: Deploy to ${{ matrix.server }}
         run: |
           SERVER="${{ matrix.server }}"
@@ -136,7 +166,7 @@ jobs:
           }
           
           echo "Deploying backend to $SERVER..."
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'EOF'
+          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER 'bash -s' << 'ENDSSH'
             cd /home/ubuntu
             
             # Load .env file
@@ -155,10 +185,10 @@ jobs:
             sleep 15
             
             # Check container status
-            CONTAINER_STATUS=\$(sudo docker inspect --format='{{.State.Status}}' ktb-chat-backend 2>/dev/null || echo "not-found")
-            echo "Container status: \$CONTAINER_STATUS"
+            CONTAINER_STATUS=$(sudo docker inspect --format='{{.State.Status}}' ktb-chat-backend 2>/dev/null || echo "not-found")
+            echo "Container status: $CONTAINER_STATUS"
             
-            if [ "\$CONTAINER_STATUS" != "running" ]; then
+            if [ "$CONTAINER_STATUS" != "running" ]; then
               echo "ERROR: Container is not running!"
               echo "Container logs (last 100 lines):"
               sudo docker logs --tail 100 ktb-chat-backend 2>&1 || true
@@ -169,23 +199,23 @@ jobs:
             MAX_WAIT=120
             WAIT_TIME=0
             HEALTHY=false
-            while [ \$WAIT_TIME -lt \$MAX_WAIT ]; do
+            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
               if curl -sf http://localhost:5001/api/health > /dev/null 2>&1; then
                 HEALTHY=true
                 break
               fi
-              echo "Waiting for health check... (\$WAIT_TIME/\$MAX_WAIT seconds)"
+              echo "Waiting for health check... ($WAIT_TIME/$MAX_WAIT seconds)"
               sleep 5
-              WAIT_TIME=\$((WAIT_TIME + 5))
+              WAIT_TIME=$((WAIT_TIME + 5))
             done
             
-            if [ "\$HEALTHY" = "true" ]; then
+            if [ "$HEALTHY" = "true" ]; then
               echo "✅ Health check passed!"
               sudo docker ps --filter name=ktb-chat-backend --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
             else
-              echo "❌ Health check failed after \$MAX_WAIT seconds!"
+              echo "❌ Health check failed after $MAX_WAIT seconds!"
               echo "Container logs (last 100 lines):"
               sudo docker logs --tail 100 ktb-chat-backend 2>&1 || true
               exit 1
             fi
-          EOF
+          ENDSSH
