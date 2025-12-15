@@ -155,11 +155,14 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
           
+          echo "Copying docker-compose.yaml to $SERVER..."
+          scp -i ~/.ssh/id_rsa apps/frontend/docker-compose.yaml ubuntu@$SERVER:/home/ubuntu/
+          
           echo "Deploying frontend to $SERVER..."
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash -s << EOF
             cd /home/ubuntu
             sudo docker image prune -a -f
             export DOCKER_USERNAME="$USERNAME"
             sudo -E docker pull \$DOCKER_USERNAME/ktb-chat-frontend:latest
-            sudo -E docker compose up -d --force-recreate
+            sudo -E docker compose -f docker-compose.yaml up -d --force-recreate
           EOF

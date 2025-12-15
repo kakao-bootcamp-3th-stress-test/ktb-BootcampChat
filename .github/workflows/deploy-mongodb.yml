@@ -79,17 +79,38 @@ jobs:
           # Copy files
           scp -i ~/.ssh/id_rsa apps/backend/docker-compose.mongodb.yaml ubuntu@$SERVER:/home/ubuntu/
           scp -i ~/.ssh/id_rsa /tmp/.env.mongodb ubuntu@$SERVER:/home/ubuntu/.env
-          scp -i ~/.ssh/id_rsa infra-configuration/scripts/init-replica.sh ubuntu@$SERVER:/home/ubuntu/
           
           # Deploy MongoDB Primary
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'EOF'
             cd /home/ubuntu
-            chmod +x init-replica.sh
+            
+            # Load environment variables
+            if [ -f .env ]; then
+              export $(grep -v '^#' .env | xargs)
+            fi
+            
             sudo docker image prune -a -f
             sudo docker compose -f docker-compose.mongodb.yaml up -d
             
             echo "Waiting for MongoDB to start..."
-            sleep 15
+            sleep 20
+            
+            # Initialize Replica Set (Primary only)
+            echo "Initializing Replica Set..."
+            sudo docker exec mongodb-primary mongosh --username admin --password bootcamp-chat --authenticationDatabase admin --eval "
+              try {
+                rs.status();
+                print('Replica Set already initialized');
+              } catch(e) {
+                rs.initiate({
+                  _id: 'ktb-replica-set',
+                  members: [
+                    { _id: 0, host: '10.0.101.54:27017', priority: 2 }
+                  ]
+                });
+                print('Replica Set initialized');
+              }
+            " || echo "Replica Set init failed (may be already initialized)"
             
             # Check status
             sudo docker ps --filter name=mongodb
@@ -193,9 +214,29 @@ jobs:
             sudo docker compose -f docker-compose.mongodb.yaml up -d
             
             echo "Waiting for MongoDB to start..."
-            sleep 10
+            sleep 15
             
             # Check status
             sudo docker ps --filter name=mongodb
           EOF
+          
+          # Add Secondary to Replica Set
+          PRIMARY_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=primary" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+            --output text)
+          
+          SECONDARY_PRIVATE_IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=secondary" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].PrivateIpAddress' \
+            --output text | tr '\t' '\n' | sed -n "${{ matrix.name == 'secondary-1' && '1p' || '2p' }}")
+          
+          echo "Adding Secondary $SECONDARY_PRIVATE_IP to Primary $PRIMARY_IP"
+          
+          PRIMARY_PUBLIC=$(aws ec2 describe-instances \
+            --filters "Name=tag:Service,Values=mongodb" "Name=tag:MongoRole,Values=primary" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          
+          ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_PUBLIC "sudo docker exec mongodb-primary mongosh --username admin --password bootcamp-chat --authenticationDatabase admin --eval \"rs.add('$SECONDARY_PRIVATE_IP:27017')\" || echo 'Secondary may already be added'"
 

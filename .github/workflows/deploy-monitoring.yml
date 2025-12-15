@@ -163,6 +163,12 @@ jobs:
           
           echo "Deploying to ktb-chat-observer: $SERVER"
           
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
           # Check if Docker is installed
           DOCKER_EXISTS=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@$SERVER 'command -v docker >/dev/null && echo "true" || echo "false"')
           
@@ -179,12 +185,6 @@ jobs:
               sudo usermod -aG docker ubuntu
           DOCKER_INSTALL
           fi
-
-          # Setup SSH
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           # Create remote directories
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/monitoring/prometheus/targets /home/ubuntu/monitoring/grafana/provisioning/datasources /home/ubuntu/monitoring/grafana/provisioning/dashboards"
