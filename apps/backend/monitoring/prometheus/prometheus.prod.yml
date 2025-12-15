@@ -60,3 +60,8 @@ scrape_configs:
       - files:
           - '/etc/prometheus/targets/node-exporters.prod.yml'
         refresh_interval: 5s
+    metric_relabel_configs:
+      # cluster 레이블을 모든 메트릭에 추가
+      - source_labels: [__meta_file_sd_label_cluster]
+        target_label: cluster
+        regex: (.+)
