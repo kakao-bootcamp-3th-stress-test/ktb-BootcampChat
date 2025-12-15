@@ -228,10 +228,10 @@ jobs:
           # Create keyfile on Secondary (use secret or copy from Primary)
           if [ -n "${{ secrets.MONGO_KEYFILE }}" ]; then
             # Use secret if available (ensure single line and correct ownership)
-            ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && echo -n '${{ secrets.MONGO_KEYFILE }}' | tr -d '\n' > /home/ubuntu/mongodb-keyfile/keyfile && sudo chown 999:999 /home/ubuntu/mongodb-keyfile/keyfile && sudo chmod 400 /home/ubuntu/mongodb-keyfile/keyfile"
+            ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && rm -f /home/ubuntu/mongodb-keyfile/keyfile && echo -n '${{ secrets.MONGO_KEYFILE }}' | tr -d '\n' > /home/ubuntu/mongodb-keyfile/keyfile.tmp && sudo mv /home/ubuntu/mongodb-keyfile/keyfile.tmp /home/ubuntu/mongodb-keyfile/keyfile && sudo chown 999:999 /home/ubuntu/mongodb-keyfile/keyfile && sudo chmod 400 /home/ubuntu/mongodb-keyfile/keyfile"
           else
             # Copy from Primary if secret not available (ensure single line and correct ownership)
-            ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_IP "cat /home/ubuntu/mongodb-keyfile/keyfile" | ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && tr -d '\n' > /home/ubuntu/mongodb-keyfile/keyfile && sudo chown 999:999 /home/ubuntu/mongodb-keyfile/keyfile && sudo chmod 400 /home/ubuntu/mongodb-keyfile/keyfile"
+            ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_IP "cat /home/ubuntu/mongodb-keyfile/keyfile" | ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/mongodb-keyfile && rm -f /home/ubuntu/mongodb-keyfile/keyfile && tr -d '\n' > /home/ubuntu/mongodb-keyfile/keyfile.tmp && sudo mv /home/ubuntu/mongodb-keyfile/keyfile.tmp /home/ubuntu/mongodb-keyfile/keyfile && sudo chown 999:999 /home/ubuntu/mongodb-keyfile/keyfile && sudo chmod 400 /home/ubuntu/mongodb-keyfile/keyfile"
           fi
           
           # Deploy MongoDB Secondary
