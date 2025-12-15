@@ -76,7 +76,7 @@ jobs:
             echo "ERROR: Required environment variables are missing!"
             echo ""
             echo "GitHub Secrets > ENV_FRONTEND에 다음이 포함되어 있는지 확인하세요:"
-            echo "  NEXT_PUBLIC_API_URL=https://chat.goorm-ktb-002.goorm.team/api"
+            echo "  NEXT_PUBLIC_API_URL=https://chat.goorm-ktb-002.goorm.team"
             echo "  NEXT_PUBLIC_SOCKET_URL=https://chat.goorm-ktb-002.goorm.team"
             exit 1
           fi
