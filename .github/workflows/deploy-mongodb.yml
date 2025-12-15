@@ -238,5 +238,8 @@ jobs:
             --query 'Reservations[0].Instances[0].PublicIpAddress' \
             --output text)
           
+          # Add Primary to known_hosts
+          ssh-keyscan -H "$PRIMARY_PUBLIC" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
           ssh -i ~/.ssh/id_rsa ubuntu@$PRIMARY_PUBLIC "sudo docker exec mongodb-primary mongosh --username admin --password bootcamp-chat --authenticationDatabase admin --eval \"rs.add('$SECONDARY_PRIVATE_IP:27017')\" || echo 'Secondary may already be added'"
 

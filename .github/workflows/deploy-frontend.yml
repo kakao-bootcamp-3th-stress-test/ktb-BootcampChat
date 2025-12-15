@@ -111,6 +111,9 @@ jobs:
     env:
       USERNAME: ${{ secrets.DOCKER_USERNAME }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
