@@ -88,8 +88,9 @@ public class SecurityConfig {
                         .bearerTokenResolver(request -> {
                             // /api/auth/** 경로에서는 토큰을 반환하지 않아 JWT 검증을 건너뜀
                             // 이 경로는 permitAll()로 설정되어 있으므로 인증이 필요 없음
+                            // /api/api/auth/** 경로도 처리 (ALB 경로 중복 대응)
                             String uri = request.getRequestURI();
-                            if (uri != null && uri.startsWith("/api/auth/")) {
+                            if (uri != null && (uri.startsWith("/api/auth/") || uri.startsWith("/api/api/auth/"))) {
                                 log.debug("Skipping token resolution for /api/auth/** path: {}", uri);
                                 return null;
                             }
