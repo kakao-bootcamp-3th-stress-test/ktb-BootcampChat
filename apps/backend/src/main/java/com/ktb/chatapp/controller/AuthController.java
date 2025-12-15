@@ -233,9 +233,12 @@ public class AuthController {
     @SecurityRequirement(name = "")
     @PostMapping("/verify-token")
     public ResponseEntity<?> verifyToken(HttpServletRequest request) {
+        log.info("=== verify-token request received from {} ===", request.getRemoteAddr());
+        log.info("Request URI: {}", request.getRequestURI());
+        log.info("Request Method: {}", request.getMethod());
         try {
-            log.debug("verify-token request received from {}", request.getRemoteAddr());
             String token = extractToken(request);
+            log.info("Token extracted: {}", token != null ? "YES" : "NO");
             
             if (token == null) {
                 log.warn("verify-token: Token not found in request");
@@ -243,22 +246,28 @@ public class AuthController {
                         .body(new TokenVerifyResponse(false, "토큰이 필요합니다.", null));
             }
 
-            if (!jwtService.validateToken(token)) {
+            boolean isValidToken = jwtService.validateToken(token);
+            log.info("Token validation result: {}", isValidToken);
+            
+            if (!isValidToken) {
                 log.warn("verify-token: Invalid token");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new TokenVerifyResponse(false, "유효하지 않은 토큰입니다.", null));
             }
 
             String userId = jwtService.extractUserId(token);
-            log.debug("verify-token: Valid token for user {}", userId);
+            log.info("verify-token: Valid token for user {}", userId);
             
             Optional<User> userOpt;
             try {
+                log.info("Attempting to find user in database: {}", userId);
                 userOpt = userRepository.findById(userId);
+                log.info("User lookup result: {}", userOpt.isPresent() ? "FOUND" : "NOT FOUND");
             } catch (Exception dbException) {
-                log.error("Database error during token verification for user {}: {}", userId, dbException.getMessage());
+                log.error("Database error during token verification for user {}: {}", userId, dbException.getMessage(), dbException);
                 // MongoDB 연결 실패 시에도 토큰 자체는 유효하므로, 사용자 정보 없이 성공 처리
                 // 이렇게 하면 프론트엔드가 계속 동작할 수 있음
+                log.info("Returning success response despite DB error");
                 return ResponseEntity.ok(new TokenVerifyResponse(true, "토큰이 유효합니다. (DB 연결 일시 중단)", null));
             }
 
@@ -270,7 +279,7 @@ public class AuthController {
 
             User user = userOpt.get();
             AuthUserDto authUserDto = new AuthUserDto(user.getId(), user.getName(), user.getEmail(), user.getProfileImage());
-            log.debug("verify-token: Token verified successfully for user {}", userId);
+            log.info("verify-token: Token verified successfully for user {}", userId);
             return ResponseEntity.ok(new TokenVerifyResponse(true, "토큰이 유효합니다.", authUserDto));
 
         } catch (Exception e) {

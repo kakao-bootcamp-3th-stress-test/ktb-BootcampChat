@@ -107,6 +107,10 @@ public class RoomController {
             @Parameter(description = "검색어 (채팅방 이름)", example = "프로젝트") @RequestParam(required = false) String search,
             Principal principal) {
 
+        log.info("=== getAllRooms request received ===");
+        log.info("Principal: {}", principal != null ? principal.getName() : "null");
+        log.info("Parameters: page={}, pageSize={}, sortField={}, sortOrder={}, search={}", page, pageSize, sortField, sortOrder, search);
+        
         try {
             // PageRequest DTO 생성
             PageRequest pageRequest = new PageRequest();
@@ -116,8 +120,10 @@ public class RoomController {
             pageRequest.setSortOrder(sortOrder);
             pageRequest.setSearch(search);
 
+            log.info("Calling roomService.getAllRoomsWithPagination for user: {}", principal != null ? principal.getName() : "null");
             // 서비스에서 페이지네이션 처리
-            RoomsResponse response = roomService.getAllRoomsWithPagination(pageRequest, principal.getName());
+            RoomsResponse response = roomService.getAllRoomsWithPagination(pageRequest, principal != null ? principal.getName() : null);
+            log.info("getAllRoomsWithPagination completed successfully. Response data size: {}", response.getData() != null ? response.getData().size() : 0);
 
             // 캐시 설정
             return ResponseEntity.ok()

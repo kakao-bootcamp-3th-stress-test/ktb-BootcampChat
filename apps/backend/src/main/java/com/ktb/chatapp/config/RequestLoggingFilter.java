@@ -30,18 +30,46 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        if (isDevelopmentMode()) {
-            log.info("[{}] {} {}",
-                    Instant.now().toString(),
-                    request.getMethod(),
-                    request.getRequestURI());
+        log.info("╔═══════════════════════════════════════════════════════════════════════════════╗");
+        log.info("║                           📥 INCOMING REQUEST                                ║");
+        log.info("╠═══════════════════════════════════════════════════════════════════════════════╣");
+        log.info("║ Method: {}", request.getMethod());
+        log.info("║ URI: {}", request.getRequestURI());
+        log.info("║ QueryString: {}", request.getQueryString() != null ? request.getQueryString() : "none");
+        log.info("║ RemoteAddr: {}", request.getRemoteAddr());
+        log.info("║ RemoteHost: {}", request.getRemoteHost());
+        
+        // Log all headers
+        log.info("║ Headers:");
+        java.util.Enumeration<String> headerNames = request.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+            String headerName = headerNames.nextElement();
+            String headerValue = request.getHeader(headerName);
+            if (headerName.toLowerCase().contains("token") || headerName.toLowerCase().contains("auth")) {
+                // Mask sensitive headers
+                if (headerValue != null && headerValue.length() > 20) {
+                    headerValue = headerValue.substring(0, 20) + "...";
+                }
+            }
+            log.info("║   {}: {}", headerName, headerValue);
         }
-
-        filterChain.doFilter(request, response);
-    }
-
-    private boolean isDevelopmentMode() {
-        String normalized = profile.trim().toLowerCase();
-        return "dev".equals(normalized);
+        
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            filterChain.doFilter(request, response);
+        } catch (Exception e) {
+            log.error("║ ❌ Exception during filter chain: {}", e.getMessage(), e);
+            throw e;
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            
+            log.info("╠═══════════════════════════════════════════════════════════════════════════════╣");
+            log.info("║                           📤 RESPONSE                                       ║");
+            log.info("╠═══════════════════════════════════════════════════════════════════════════════╣");
+            log.info("║ Status: {}", response.getStatus());
+            log.info("║ Duration: {}ms", duration);
+            log.info("╚═══════════════════════════════════════════════════════════════════════════════╝");
+        }
     }
 }

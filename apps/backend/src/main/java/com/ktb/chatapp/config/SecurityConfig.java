@@ -57,10 +57,14 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
+        log.info("=== SecurityFilterChain configuration ===");
+        
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(request -> createCorsConfiguration()))
+                .cors(cors -> cors.configurationSource(request -> {
+                    log.debug("CORS check for request: {} from origin: {}", request.getRequestURI(), request.getHeader("Origin"));
+                    return createCorsConfiguration();
+                }))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/health",
@@ -79,8 +83,47 @@ public class SecurityConfig {
                 )
                 // Spring Security 6 OAuth2 Resource Server 설정
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .bearerTokenResolver(bearerTokenResolver)
-                        .jwt(jwt -> jwt.decoder(jwtDecoder))
+                        .bearerTokenResolver(request -> {
+                            String token = bearerTokenResolver.resolve(request);
+                            log.info("BearerTokenResolver resolved token: {}", token != null ? "YES (length: " + token.length() + ")" : "NO");
+                            return token;
+                        })
+                        .jwt(jwt -> jwt.decoder(token -> {
+                            log.info("JWT Decoder called for token: {}", token != null ? "YES" : "NO");
+                            try {
+                                var decoded = jwtDecoder.decode(token);
+                                log.info("JWT decoded successfully. Subject: {}", decoded.getSubject());
+                                return decoded;
+                            } catch (Exception e) {
+                                log.error("JWT decode failed: {}", e.getMessage(), e);
+                                throw e;
+                            }
+                        }))
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            log.error("=== Access Denied ===");
+                            log.error("URI: {}", request.getRequestURI());
+                            log.error("Method: {}", request.getMethod());
+                            log.error("RemoteAddr: {}", request.getRemoteAddr());
+                            log.error("Error: {}", accessDeniedException.getMessage(), accessDeniedException);
+                            response.setStatus(403);
+                        })
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            log.error("=== Authentication Entry Point (401) ===");
+                            log.error("Request URI: {}", request.getRequestURI());
+                            log.error("Request Method: {}", request.getMethod());
+                            log.error("Request RemoteAddr: {}", request.getRemoteAddr());
+                            log.error("x-auth-token header: {}", request.getHeader("x-auth-token") != null ? "PRESENT" : "MISSING");
+                            log.error("Authorization header: {}", request.getHeader("Authorization") != null ? "PRESENT" : "MISSING");
+                            log.error("Auth Exception: {}", authException.getMessage(), authException);
+                            log.error("URI: {}", request.getRequestURI());
+                            log.error("Method: {}", request.getMethod());
+                            log.error("RemoteAddr: {}", request.getRemoteAddr());
+                            log.error("Headers: x-auth-token={}, Authorization={}", 
+                                request.getHeader("x-auth-token") != null ? "present" : "missing",
+                                request.getHeader("Authorization") != null ? "present" : "missing");
+                            log.error("Error: {}", authException.getMessage(), authException);
+                            response.setStatus(401);
+                        })
                 );
         
         return http.build();

@@ -56,12 +56,18 @@ public class RoomService {
     public RoomsResponse getAllRoomsWithPagination(
             com.ktb.chatapp.dto.PageRequest pageRequest, String name) {
 
+        log.info("getAllRoomsWithPagination called with pageRequest: page={}, pageSize={}, sortField={}, sortOrder={}, search={}", 
+            pageRequest.getPage(), pageRequest.getPageSize(), pageRequest.getSortField(), pageRequest.getSortOrder(), pageRequest.getSearch());
+        log.info("User name: {}", name);
+        
         try {
             // 정렬 설정 검증
             if (!pageRequest.isValidSortField()) {
+                log.warn("Invalid sortField: {}, defaulting to createdAt", pageRequest.getSortField());
                 pageRequest.setSortField("createdAt");
             }
             if (!pageRequest.isValidSortOrder()) {
+                log.warn("Invalid sortOrder: {}, defaulting to desc", pageRequest.getSortOrder());
                 pageRequest.setSortOrder("desc");
             }
 
@@ -71,6 +77,7 @@ public class RoomService {
                 : Sort.Direction.ASC;
 
             String sortField = pageRequest.getSortField();
+            log.info("Resolved sortField: {}, direction: {}", sortField, direction);
 
             RoomListCacheKey cacheKey = new RoomListCacheKey(
                 pageRequest.getPage(),
@@ -82,6 +89,7 @@ public class RoomService {
 
             CachedRoomsPage cached = roomListCache.get(cacheKey);
             if (cached != null) {
+                log.info("Returning cached rooms data");
                 return buildResponseFromCache(cached, name);
             }
 
@@ -92,22 +100,49 @@ public class RoomService {
                 Sort.by(direction, sortField)
             );
 
-            List<RoomSummary> roomSummaries = loadRoomSummaries(
-                pageRequest.getSearch(),
-                springPageRequest.getPageNumber(),
-                springPageRequest.getPageSize(),
-                direction,
-                sortField
-            );
+            log.info("Loading room summaries from database...");
+            List<RoomSummary> roomSummaries;
+            try {
+                roomSummaries = loadRoomSummaries(
+                    pageRequest.getSearch(),
+                    springPageRequest.getPageNumber(),
+                    springPageRequest.getPageSize(),
+                    direction,
+                    sortField
+                );
+                log.info("Loaded {} room summaries", roomSummaries.size());
+            } catch (Exception dbException) {
+                log.error("Database error loading room summaries: {}", dbException.getMessage(), dbException);
+                throw dbException;
+            }
 
-            long total = computeTotalCount(pageRequest.getSearch());
+            log.info("Computing total count...");
+            long total;
+            try {
+                total = computeTotalCount(pageRequest.getSearch());
+                log.info("Total count: {}", total);
+            } catch (Exception dbException) {
+                log.error("Database error computing total count: {}", dbException.getMessage(), dbException);
+                total = 0;
+            }
 
-            Map<String, User> usersById = loadUsersForRoomSummaries(roomSummaries);
-            Map<String, Long> recentCounts = loadRecentMessageCountsByIds(
-                roomSummaries.stream().map(RoomSummary::id).toList());
+            log.info("Loading users and message counts...");
+            Map<String, User> usersById;
+            Map<String, Long> recentCounts;
+            try {
+                usersById = loadUsersForRoomSummaries(roomSummaries);
+                recentCounts = loadRecentMessageCountsByIds(
+                    roomSummaries.stream().map(RoomSummary::id).toList());
+            } catch (Exception dbException) {
+                log.error("Database error loading users/message counts: {}", dbException.getMessage(), dbException);
+                usersById = Collections.emptyMap();
+                recentCounts = Collections.emptyMap();
+            }
 
+            final Map<String, User> finalUsersById = usersById;
+            final Map<String, Long> finalRecentCounts = recentCounts;
             List<RoomResponse> baseRoomResponses = roomSummaries.stream()
-                .map(summary -> mapToRoomResponse(summary, null, usersById, recentCounts))
+                .map(summary -> mapToRoomResponse(summary, null, finalUsersById, finalRecentCounts))
                 .toList();
             List<RoomResponse> sanitizedResponses = stripParticipants(baseRoomResponses);
 
@@ -127,6 +162,7 @@ public class RoomService {
 
             roomListCache.put(cacheKey, sanitizedResponses, metadata);
 
+            log.info("getAllRoomsWithPagination completed successfully. Returning {} rooms", sanitizedResponses.size());
             return RoomsResponse.builder()
                 .success(true)
                 .data(applyRequesterIdentity(sanitizedResponses, name))
@@ -134,10 +170,23 @@ public class RoomService {
                 .build();
 
         } catch (Exception e) {
-            log.error("방 목록 조회 에러", e);
+            log.error("방 목록 조회 에러: {}", e.getMessage(), e);
+            // MongoDB 연결 실패 시에도 빈 리스트 반환하여 서비스가 계속 동작하도록 함
             return RoomsResponse.builder()
                 .success(false)
                 .data(List.of())
+                .metadata(PageMetadata.builder()
+                    .total(0)
+                    .page(pageRequest.getPage())
+                    .pageSize(pageRequest.getPageSize())
+                    .totalPages(0)
+                    .hasMore(false)
+                    .currentCount(0)
+                    .sort(PageMetadata.SortInfo.builder()
+                        .field(pageRequest.getSortField())
+                        .order(pageRequest.getSortOrder())
+                        .build())
+                    .build())
                 .build();
         }
     }
@@ -296,16 +345,26 @@ public class RoomService {
         operations.add(projection);
 
         Aggregation aggregation = Aggregation.newAggregation(operations);
-        AggregationResults<RoomSummary> results =
-            mongoTemplate.aggregate(aggregation, "rooms", RoomSummary.class);
-        return results.getMappedResults();
+        AggregationResults<RoomSummary> results;
+        try {
+            results = mongoTemplate.aggregate(aggregation, "rooms", RoomSummary.class);
+            return results.getMappedResults();
+        } catch (Exception e) {
+            log.error("MongoDB aggregation error in loadRoomSummaries: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     private long computeTotalCount(String search) {
-        if (StringUtils.hasText(search)) {
-            return roomRepository.countByNameContainingIgnoreCase(search.trim());
+        try {
+            if (StringUtils.hasText(search)) {
+                return roomRepository.countByNameContainingIgnoreCase(search.trim());
+            }
+            return roomRepository.count();
+        } catch (Exception e) {
+            log.error("MongoDB error in computeTotalCount: {}", e.getMessage(), e);
+            throw e;
         }
-        return roomRepository.count();
     }
 
     private String resolveRoomSortField(String field) {
@@ -428,9 +487,14 @@ public class RoomService {
         if (userIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<String, User> result = new HashMap<>();
-        userRepository.findAllById(userIds).forEach(user -> result.put(user.getId(), user));
-        return result;
+        try {
+            Map<String, User> result = new HashMap<>();
+            userRepository.findAllById(userIds).forEach(user -> result.put(user.getId(), user));
+            return result;
+        } catch (Exception e) {
+            log.error("MongoDB error in loadUsersForRoomSummaries: {}", e.getMessage(), e);
+            return Collections.emptyMap();
+        }
     }
 
     private Map<String, Long> loadRecentMessageCounts(List<Room> rooms) {
@@ -456,12 +520,17 @@ public class RoomService {
         if (roomIds == null || roomIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
-        List<MessageRepository.RoomMessageCount> counts =
-            messageRepository.countRecentMessagesByRoomIds(roomIds, tenMinutesAgo);
-        Map<String, Long> result = new HashMap<>();
-        counts.forEach(count -> result.put(count.getId(), count.getCount()));
-        return result;
+        try {
+            LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+            List<MessageRepository.RoomMessageCount> counts =
+                messageRepository.countRecentMessagesByRoomIds(roomIds, tenMinutesAgo);
+            Map<String, Long> result = new HashMap<>();
+            counts.forEach(count -> result.put(count.getId(), count.getCount()));
+            return result;
+        } catch (Exception e) {
+            log.error("MongoDB error in loadRecentMessageCountsByIds: {}", e.getMessage(), e);
+            return Collections.emptyMap();
+        }
     }
 
     private int calculateTotalPages(long total, int pageSize) {
