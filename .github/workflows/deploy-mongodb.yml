@@ -90,7 +90,7 @@ jobs:
             fi
             
             sudo docker image prune -a -f
-            sudo docker compose -f docker-compose.mongodb.yaml up -d
+            sudo -E docker compose -f docker-compose.mongodb.yaml up -d
             
             echo "Waiting for MongoDB to start..."
             sleep 20
@@ -211,7 +211,7 @@ jobs:
           ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << 'EOF'
             cd /home/ubuntu
             sudo docker image prune -a -f
-            sudo docker compose -f docker-compose.mongodb.yaml up -d
+            sudo -E docker compose -f docker-compose.mongodb.yaml up -d
             
             echo "Waiting for MongoDB to start..."
             sleep 15

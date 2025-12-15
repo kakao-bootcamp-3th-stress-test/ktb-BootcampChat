@@ -112,8 +112,8 @@ jobs:
             # Clean up images
             sudo docker image prune -a -f
             
-            # Start Redis with docker-compose (uses .env file automatically)
-            sudo docker compose -f docker-compose.redis.yaml up -d
+            # Start Redis with docker-compose
+            sudo -E docker compose -f docker-compose.redis.yaml up -d
             
             echo "Waiting for Redis to start..."
             sleep 10
