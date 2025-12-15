@@ -27,184 +27,130 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      - name: Generate Prometheus targets dynamically
+      - name: Generate Prometheus targets
         run: |
+          set -euo pipefail
           mkdir -p apps/backend/monitoring/prometheus/targets
 
-          # Backend 서버들 (Service=rest-api, socketio) - Private IP 사용
-          BACKEND_IPS=$(aws ec2 describe-instances \
+          # Get server IPs
+          BACKEND_IPS=$(aws ec2 describe-instances --region ap-northeast-2 \
             --filters "Name=tag:Role,Values=backend" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PrivateIpAddress' \
-            --output text | tr '\t' '\n' | grep -v '^$')
+            --query 'Reservations[*].Instances[*].PrivateIpAddress' --output text | tr '\t\n' ' ' | xargs -n1 | grep -v '^$' | sort -u)
 
-          # Frontend 서버들 (Role=frontend) - Private IP 사용
-          FRONTEND_IPS=$(aws ec2 describe-instances \
+          FRONTEND_IPS=$(aws ec2 describe-instances --region ap-northeast-2 \
             --filters "Name=tag:Role,Values=frontend" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PrivateIpAddress' \
-            --output text | tr '\t' '\n' | grep -v '^$')
+            --query 'Reservations[*].Instances[*].PrivateIpAddress' --output text | tr '\t\n' ' ' | xargs -n1 | grep -v '^$' | sort -u)
 
-          # MongoDB (Service=mongodb) - Private IP 사용
-          MONGODB_IPS=$(aws ec2 describe-instances \
+          MONGODB_IPS=$(aws ec2 describe-instances --region ap-northeast-2 \
             --filters "Name=tag:Service,Values=mongodb" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PrivateIpAddress' \
-            --output text | tr '\t' '\n' | grep -v '^$')
+            --query 'Reservations[*].Instances[*].PrivateIpAddress' --output text | tr '\t\n' ' ' | xargs -n1 | grep -v '^$' | sort -u)
 
-          # Redis (Service=redis) - Private IP 사용
-          REDIS_IP=$(aws ec2 describe-instances \
+          REDIS_IP=$(aws ec2 describe-instances --region ap-northeast-2 \
             --filters "Name=tag:Service,Values=redis" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].PrivateIpAddress' \
-            --output text)
+            --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text)
 
-          # spring-boot.prod.yml (Backend - Actuator metrics)
+          OBSERVER_IP=$(aws ec2 describe-instances --region ap-northeast-2 \
+            --filters "Name=tag:Role,Values=observer" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text)
+
+          # Generate target files
           echo "# Auto-generated - Backend servers" > apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
           for ip in $BACKEND_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml << EOF
-          - targets: ['${ip}:5001']
-            labels:
-              application: 'ktb-chat-backend'
-              environment: 'production'
-              cluster: 'backend'
-          EOF
+            echo "- targets: ['${ip}:5001']" >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
+            echo "  labels:" >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
+            echo "    application: 'ktb-chat-backend'" >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
+            echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
+            echo "    cluster: 'backend'" >> apps/backend/monitoring/prometheus/targets/spring-boot.prod.yml
           done
 
-          # nextjs.prod.yml (Frontend - Next.js metrics)
           echo "# Auto-generated - Frontend servers" > apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
           for ip in $FRONTEND_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml << EOF
-          - targets: ['${ip}:3000']
-            labels:
-              application: 'ktb-chat-frontend'
-              environment: 'production'
-              cluster: 'frontend'
-          EOF
+            echo "- targets: ['${ip}:3000']" >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
+            echo "  labels:" >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
+            echo "    application: 'ktb-chat-frontend'" >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
+            echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
+            echo "    cluster: 'frontend'" >> apps/backend/monitoring/prometheus/targets/nextjs.prod.yml
           done
 
-          # mongodb.prod.yml (MongoDB Exporter - 3대)
           echo "# Auto-generated - MongoDB servers" > apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
           for ip in $MONGODB_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml << EOF
-          - targets: ['${ip}:9216']
-            labels:
-              environment: 'production'
-              service: 'mongodb'
-              cluster: 'mongodb'
-          EOF
+            echo "- targets: ['${ip}:9216']" >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
+            echo "  labels:" >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
+            echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
+            echo "    service: 'mongodb'" >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
+            echo "    cluster: 'mongodb'" >> apps/backend/monitoring/prometheus/targets/mongodb.prod.yml
           done
 
-          # redis.prod.yml
-          cat > apps/backend/monitoring/prometheus/targets/redis.prod.yml << EOF
-          # Auto-generated - Redis server
-          - targets: ['${REDIS_IP}:9121']
-            labels:
-              environment: 'production'
-              service: 'redis'
-              cluster: 'redis'
-          EOF
+          echo "# Auto-generated - Redis server" > apps/backend/monitoring/prometheus/targets/redis.prod.yml
+          if [ -n "$REDIS_IP" ] && [ "$REDIS_IP" != "None" ]; then
+            echo "- targets: ['${REDIS_IP}:9121']" >> apps/backend/monitoring/prometheus/targets/redis.prod.yml
+            echo "  labels:" >> apps/backend/monitoring/prometheus/targets/redis.prod.yml
+            echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/redis.prod.yml
+            echo "    service: 'redis'" >> apps/backend/monitoring/prometheus/targets/redis.prod.yml
+            echo "    cluster: 'redis'" >> apps/backend/monitoring/prometheus/targets/redis.prod.yml
+          fi
 
-          # node-exporters.prod.yml (모든 서버의 Node Exporter)
           echo "# Auto-generated - Node Exporters" > apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
-          for ip in $BACKEND_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${ip}:9100']
-            labels:
-              environment: 'production'
-              cluster: 'backend'
-          EOF
+          for ip in $BACKEND_IPS $FRONTEND_IPS $MONGODB_IPS; do
+            if [ -n "$ip" ]; then
+              echo "- targets: ['${ip}:9100']" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+              echo "  labels:" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+              echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            fi
           done
-          for ip in $FRONTEND_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${ip}:9100']
-            labels:
-              environment: 'production'
-              cluster: 'frontend'
-          EOF
-          done
-          for ip in $MONGODB_IPS; do
-            cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${ip}:9100']
-            labels:
-              environment: 'production'
-              cluster: 'mongodb'
-              service: 'mongodb'
-          EOF
-          done
-          cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${REDIS_IP}:9100']
-            labels:
-              environment: 'production'
-              cluster: 'redis'
-              service: 'redis'
-          EOF
+          if [ -n "$REDIS_IP" ] && [ "$REDIS_IP" != "None" ]; then
+            echo "- targets: ['${REDIS_IP}:9100']" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "  labels:" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "    cluster: 'redis'" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "    service: 'redis'" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+          fi
+          if [ -n "$OBSERVER_IP" ] && [ "$OBSERVER_IP" != "None" ]; then
+            echo "- targets: ['${OBSERVER_IP}:9100']" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "  labels:" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "    environment: 'production'" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+            echo "    cluster: 'observer'" >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml
+          fi
 
-          # Observer 서버 (Role=observer)
-          OBSERVER_IP=$(aws ec2 describe-instances \
-            --filters "Name=tag:Role,Values=observer" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[*].Instances[*].PublicIpAddress' \
-            --output text | tr -d '\t\n')
-
-          # Observer 서버 Node Exporter 추가
-          cat >> apps/backend/monitoring/prometheus/targets/node-exporters.prod.yml << EOF
-          - targets: ['${OBSERVER_IP}:9100']
-            labels:
-              environment: 'production'
-              cluster: 'observer'
-          EOF
-
-          echo "Generated target files:"
-          ls -la apps/backend/monitoring/prometheus/targets/
-
-      - name: Deploy to ktb-chat-observer
+      - name: Deploy to observer server
         run: |
-          # Get ktb-chat-observer server IP
-          SERVER=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=ktb-chat-observer" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].PublicIpAddress' \
-            --output text)
-          
-          echo "Deploying to ktb-chat-observer: $SERVER"
-          
+          set -euo pipefail
+
+          # Get observer server IP
+          SERVER=$(aws ec2 describe-instances --region ap-northeast-2 \
+            --filters "Name=tag:Role,Values=observer" "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+
+          if [ -z "$SERVER" ] || [ "$SERVER" = "None" ]; then
+            echo "ERROR: Could not find observer server"
+            exit 1
+          fi
+
+          echo "Deploying to observer server: $SERVER"
+
           # Setup SSH
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "$SERVER" >> ~/.ssh/known_hosts 2>/dev/null || true
-          
-          # Check if Docker is installed
-          DOCKER_EXISTS=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@$SERVER 'command -v docker >/dev/null && echo "true" || echo "false"')
-          
-          if [ "$DOCKER_EXISTS" = "false" ]; then
-            echo "Installing Docker on $SERVER..."
-            ssh -i ~/.ssh/id_rsa ubuntu@$SERVER << 'DOCKER_INSTALL'
-              sudo apt-get update
-              sudo apt-get install -y ca-certificates curl gnupg lsb-release
-              sudo mkdir -p /etc/apt/keyrings
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-              sudo usermod -aG docker ubuntu
-          DOCKER_INSTALL
+
+          # Check Docker installation
+          if ! ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$SERVER" command -v docker >/dev/null 2>&1; then
+            echo "Installing Docker..."
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$SERVER" 'sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg lsb-release && sudo mkdir -p /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin && sudo usermod -aG docker ubuntu'
           fi
 
-          # Create remote directories
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "mkdir -p /home/ubuntu/monitoring/prometheus/targets /home/ubuntu/monitoring/grafana/provisioning/datasources /home/ubuntu/monitoring/grafana/provisioning/dashboards"
+          # Create directories
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$SERVER" 'mkdir -p /home/ubuntu/monitoring/prometheus/targets /home/ubuntu/monitoring/grafana/provisioning/datasources /home/ubuntu/monitoring/grafana/provisioning/dashboards'
 
-          # Copy monitoring configuration files
-          scp -i ~/.ssh/id_rsa -r apps/backend/monitoring/* ubuntu@$SERVER:/home/ubuntu/monitoring/
-          scp -i ~/.ssh/id_rsa apps/backend/docker-compose.o11y.yaml ubuntu@$SERVER:/home/ubuntu/
+          # Copy files
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -r apps/backend/monitoring/* ubuntu@"$SERVER":/home/ubuntu/monitoring/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa apps/backend/docker-compose.o11y.yaml ubuntu@"$SERVER":/home/ubuntu/
 
-          # Deploy monitoring stack
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER bash << REMOTE_SCRIPT
-            cd /home/ubuntu
-            sudo docker image prune -a -f
-            export ENVIRONMENT=prod
-            export GRAFANA_ADMIN_USER="$GRAFANA_ADMIN_USER"
-            export GRAFANA_ADMIN_PASSWORD="$GRAFANA_ADMIN_PASSWORD"
-            sudo -E docker compose -f docker-compose.o11y.yaml pull
-            sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate
-          REMOTE_SCRIPT
+          # Deploy
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$SERVER" "cd /home/ubuntu && export ENVIRONMENT=prod && export GRAFANA_ADMIN_USER=\"\${GRAFANA_ADMIN_USER:-admin}\" && export GRAFANA_ADMIN_PASSWORD=\"\${GRAFANA_ADMIN_PASSWORD:-changeme}\" && sudo docker image prune -a -f && sudo -E docker compose -f docker-compose.o11y.yaml pull && sudo -E docker compose -f docker-compose.o11y.yaml up -d --force-recreate"
 
-          # Verify deployment
+          # Verify
+          echo "Waiting for containers to stabilize..."
           sleep 10
-          ssh -i ~/.ssh/id_rsa ubuntu@$SERVER "sudo docker ps --filter 'name=prometheus-ktb' --filter 'name=grafana-ktb' --filter 'name=cadvisor' --format 'table {{.Names}}\t{{.Status}}'"
-
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ubuntu@"$SERVER" "sudo docker ps --format 'table {{.Names}}\t{{.Status}}'"
