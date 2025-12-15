@@ -34,6 +34,16 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FRONTEND }}" > /tmp/.env.frontend
           echo "Frontend .env file created"
+          echo ""
+          echo "=== ENV_FRONTEND Secret 확인 ==="
+          if [ -s /tmp/.env.frontend ]; then
+            echo "Secret이 설정되어 있습니다"
+            echo "변수 목록 (값 제외):"
+            grep -v '^#' /tmp/.env.frontend | grep -v '^$' | cut -d'=' -f1 | sed 's/^/  - /' || echo "  (변수를 찾을 수 없음)"
+          else
+            echo "ERROR: Secret이 비어있거나 설정되지 않았습니다!"
+            exit 1
+          fi
       
       - name: Build and push Docker image
         working-directory: apps/frontend
@@ -41,14 +51,47 @@ jobs:
           set -e
           
           # Load environment variables from .env file
-          export $(grep -v '^#' /tmp/.env.frontend | xargs)
+          set +u
+          export $(grep -v '^#' /tmp/.env.frontend | grep -v '^$' | xargs)
+          set -u
+          
+          # Set environment variables with fallback
+          API_URL="${NEXT_PUBLIC_API_URL:-${VITE_API_URL}}"
+          SOCKET_URL="${NEXT_PUBLIC_SOCKET_URL:-${VITE_WS_URL}}"
+          
+          echo ""
+          echo "=== 환경 변수 확인 ==="
+          echo "NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:- NOT SET}"
+          echo "NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:- NOT SET}"
+          echo "VITE_API_URL (fallback): ${VITE_API_URL:- NOT SET}"
+          echo "VITE_WS_URL (fallback): ${VITE_WS_URL:- NOT SET}"
+          echo ""
+          echo "최종 사용 값:"
+          echo "API_URL: ${API_URL:- NOT SET}"
+          echo "SOCKET_URL: ${SOCKET_URL:- NOT SET}"
+          
+          # Validate required environment variables
+          if [ -z "$API_URL" ] || [ -z "$SOCKET_URL" ]; then
+            echo ""
+            echo "ERROR: Required environment variables are missing!"
+            echo ""
+            echo "GitHub Secrets > ENV_FRONTEND에 다음이 포함되어 있는지 확인하세요:"
+            echo "  NEXT_PUBLIC_API_URL=https://chat.goorm-ktb-002.goorm.team/api"
+            echo "  NEXT_PUBLIC_SOCKET_URL=https://chat.goorm-ktb-002.goorm.team"
+            exit 1
+          fi
           
           IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/ktb-chat-frontend:latest"
-          echo "Building and pushing Docker image with buildx..."
+          echo ""
+          echo "=== Docker 이미지 빌드 시작 ==="
+          echo "Image: $IMAGE_NAME"
+          echo "API URL: $API_URL"
+          echo "Socket URL: $SOCKET_URL"
+          
           docker buildx build \
             --platform linux/amd64 \
-            --build-arg VITE_API_URL="$VITE_API_URL" \
-            --build-arg VITE_WS_URL="$VITE_WS_URL" \
+            --build-arg NEXT_PUBLIC_API_URL="$API_URL" \
+            --build-arg NEXT_PUBLIC_SOCKET_URL="$SOCKET_URL" \
             --cache-from type=registry,ref=$IMAGE_NAME \
             --cache-to type=inline \
             --tag $IMAGE_NAME \
