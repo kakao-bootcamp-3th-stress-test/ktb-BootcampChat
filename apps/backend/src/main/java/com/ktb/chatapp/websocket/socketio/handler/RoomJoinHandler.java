@@ -60,7 +60,15 @@ public class RoomJoinHandler {
                 return;
             }
             
-            var userOpt = userRepository.findById(userId);
+            Optional<User> userOpt;
+            try {
+                userOpt = userRepository.findById(userId);
+            } catch (Exception dbException) {
+                log.error("Database error during joinRoom for user {}: {}", userId, dbException.getMessage());
+                client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "데이터베이스 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
+                return;
+            }
+            
             if (userOpt.isEmpty()) {
                 client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "User not found"));
                 return;
@@ -68,7 +76,16 @@ public class RoomJoinHandler {
             var user = userOpt.get();
             var userResponse = UserResponse.from(user);
 
-            if (roomRepository.findById(roomId).isEmpty()) {
+            Optional<Room> roomOpt;
+            try {
+                roomOpt = roomRepository.findById(roomId);
+            } catch (Exception dbException) {
+                log.error("Database error during joinRoom for room {}: {}", roomId, dbException.getMessage());
+                client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "데이터베이스 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
+                return;
+            }
+            
+            if (roomOpt.isEmpty()) {
                 client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "채팅방을 찾을 수 없습니다."));
                 return;
             }
@@ -82,7 +99,13 @@ public class RoomJoinHandler {
             }
 
             // MongoDB의 $addToSet 연산자를 사용한 원자적 업데이트
-            roomRepository.addParticipant(roomId, userId);
+            try {
+                roomRepository.addParticipant(roomId, userId);
+            } catch (Exception dbException) {
+                log.error("Database error adding participant {} to room {}: {}", userId, roomId, dbException.getMessage());
+                client.sendEvent(JOIN_ROOM_ERROR, Map.of("message", "데이터베이스 연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요."));
+                return;
+            }
 
             // Join socket room and add to user's room set
             client.joinRoom(roomId);
@@ -101,13 +124,33 @@ public class RoomJoinHandler {
                 .metadata(new HashMap<>())
                 .build();
 
-            joinMessage = messageRepository.save(joinMessage);
+            try {
+                joinMessage = messageRepository.save(joinMessage);
+            } catch (Exception dbException) {
+                log.error("Database error saving join message for room {}: {}", roomId, dbException.getMessage());
+                // 메시지 저장 실패는 치명적이지 않으므로 계속 진행
+                joinMessage = null;
+            }
 
             // 초기 메시지 로드
             FetchMessagesRequest req = new FetchMessagesRequest(roomId, 30, null);
-            FetchMessagesResponse messageLoadResult = messageLoader.loadMessages(req, userId);
+            FetchMessagesResponse messageLoadResult;
+            try {
+                messageLoadResult = messageLoader.loadMessages(req, userId);
+            } catch (Exception dbException) {
+                log.error("Database error loading messages for room {}: {}", roomId, dbException.getMessage());
+                // 메시지 로드 실패 시 빈 응답으로 계속 진행
+                messageLoadResult = new FetchMessagesResponse(Collections.emptyList(), false);
+            }
 
-            List<UserResponse> participants = participantCache.getParticipants(roomId, () -> loadParticipantsFromDb(roomId));
+            List<UserResponse> participants;
+            try {
+                participants = participantCache.getParticipants(roomId, () -> loadParticipantsFromDb(roomId));
+            } catch (Exception dbException) {
+                log.error("Database error loading participants for room {}: {}", roomId, dbException.getMessage());
+                // 참가자 로드 실패 시 빈 리스트로 계속 진행
+                participants = Collections.emptyList();
+            }
             
             JoinRoomSuccessResponse response = JoinRoomSuccessResponse.builder()
                 .roomId(roomId)
@@ -119,8 +162,15 @@ public class RoomJoinHandler {
 
             client.sendEvent(JOIN_ROOM_SUCCESS, response);
 
-            // 입장 메시지 브로드캐스트
-            messageDispatchQueue.enqueue(messageResponseMapper.mapToMessageResponse(joinMessage));
+            // 입장 메시지 브로드캐스트 (메시지가 저장된 경우에만)
+            if (joinMessage != null) {
+                try {
+                    messageDispatchQueue.enqueue(messageResponseMapper.mapToMessageResponse(joinMessage));
+                } catch (Exception queueException) {
+                    log.warn("Failed to enqueue join message for room {}: {}", roomId, queueException.getMessage());
+                    // 큐 실패는 치명적이지 않으므로 계속 진행
+                }
+            }
 
             // 참가자 목록 업데이트 브로드캐스트
             socketIOServer.getRoomOperations(roomId)
@@ -169,17 +219,22 @@ public class RoomJoinHandler {
     }
 
     private List<UserResponse> loadParticipantsFromDb(String roomId) {
-        Optional<Room> roomOpt = roomRepository.findById(roomId);
-        if (roomOpt.isEmpty()) {
+        try {
+            Optional<Room> roomOpt = roomRepository.findById(roomId);
+            if (roomOpt.isEmpty()) {
+                return List.of();
+            }
+            Set<String> participantIdSet = roomOpt.get().getParticipantIds();
+            if (participantIdSet == null || participantIdSet.isEmpty()) {
+                return List.of();
+            }
+            List<String> participantIds = new ArrayList<>(participantIdSet);
+            return userRepository.findAllById(participantIds).stream()
+                    .map(UserResponse::from)
+                    .toList();
+        } catch (Exception dbException) {
+            log.error("Database error loading participants from DB for room {}: {}", roomId, dbException.getMessage());
             return List.of();
         }
-        Set<String> participantIdSet = roomOpt.get().getParticipantIds();
-        if (participantIdSet == null || participantIdSet.isEmpty()) {
-            return List.of();
-        }
-        List<String> participantIds = new ArrayList<>(participantIdSet);
-        return userRepository.findAllById(participantIds).stream()
-                .map(UserResponse::from)
-                .toList();
     }
 }

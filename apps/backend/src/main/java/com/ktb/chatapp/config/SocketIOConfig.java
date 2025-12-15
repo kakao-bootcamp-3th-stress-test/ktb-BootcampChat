@@ -112,9 +112,18 @@ public class SocketIOConfig {
 
         var redissonClient = redissonClientProvider.getIfAvailable();
         if (redissonClient == null) {
-            throw new IllegalStateException("socketio.store=redis requires a RedissonClient bean");
+            log.warn("RedissonClient not available, falling back to in-memory store factory");
+            return new MemoryStoreFactory();
         }
-        log.info("Socket.IO store factory configured to use Redis-backed adapter");
-        return new RedissonStoreFactory(redissonClient);
+        
+        try {
+            // Redis 연결 테스트
+            redissonClient.getKeys().count();
+            log.info("Socket.IO store factory configured to use Redis-backed adapter");
+            return new RedissonStoreFactory(redissonClient);
+        } catch (Exception e) {
+            log.error("Failed to initialize Redis store factory, falling back to in-memory store: {}", e.getMessage());
+            return new MemoryStoreFactory();
+        }
     }
 }
